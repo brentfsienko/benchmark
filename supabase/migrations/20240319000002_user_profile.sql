@@ -1,0 +1,4 @@
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS avatar_symbol TEXT NOT NULL DEFAULT 'person.crop.circle.fill',
+  ADD COLUMN IF NOT EXISTS avatar_photo_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS avatar_photo_base64 TEXT NOT NULL DEFAULT '';
