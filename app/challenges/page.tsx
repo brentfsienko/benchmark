@@ -5,14 +5,14 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/contexts/auth-context";
 import {
+  getBenchSummaries,
   getProfile,
   getParkLeaderboard,
   joinChallenge,
-  listBenchReviews,
   listChallenges,
   listNearbyBenches
 } from "@/src/lib/api";
-import type { Bench, BenchReview, Challenge, LeaderboardEntry } from "@/src/lib/types";
+import type { Bench, Challenge, LeaderboardEntry } from "@/src/lib/types";
 import { trackEvent } from "@/src/lib/analytics";
 import { FollowButton } from "@/src/components/follow-button";
 
@@ -101,23 +101,19 @@ function ChallengesContent() {
         const isJoined = leaderboardRows.some((e) => e.userId === profileId);
         setJoined(isJoined);
 
-        const enriched: BenchWithStatus[] = await Promise.all(
-          nearbyBenches.slice(0, 8).map(async (b) => {
-            let reviewCount = 0;
-            let topPhoto: string | undefined;
-            try {
-              const reviews: BenchReview[] = await listBenchReviews(b.id);
-              reviewCount = reviews.length;
-              for (const r of reviews) {
-                if (r.photoBase64Items && r.photoBase64Items.length > 0) {
-                  topPhoto = r.photoBase64Items[0];
-                  break;
-                }
-              }
-            } catch { /* ignore */ }
-            return { ...b, benchmarked: bmSet.has(b.id), reviewCount, topPhoto };
-          })
-        );
+        const top8 = nearbyBenches.slice(0, 8);
+        const summaries = await getBenchSummaries(top8.map((b) => b.id)).catch(() => []);
+        const summaryMap = new Map(summaries.map((s) => [s.benchId, s]));
+
+        const enriched: BenchWithStatus[] = top8.map((b) => {
+          const s = summaryMap.get(b.id);
+          return {
+            ...b,
+            benchmarked: bmSet.has(b.id),
+            reviewCount: s?.reviewCount ?? 0,
+            topPhoto: s?.topPhoto ?? undefined
+          };
+        });
 
         enriched.sort((a, b) => a.name.localeCompare(b.name));
         setBenchList(enriched);

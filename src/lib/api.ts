@@ -63,6 +63,13 @@ export function getBench(benchID: string): Promise<Bench> {
   return request<Bench>(`/benches/${benchID}`);
 }
 
+export type BenchSummary = { benchId: string; reviewCount: number; topPhoto: string | null };
+
+export function getBenchSummaries(benchIds: string[]): Promise<BenchSummary[]> {
+  if (benchIds.length === 0) return Promise.resolve([]);
+  return request<BenchSummary[]>(`/benches/summaries?ids=${benchIds.join(",")}`);
+}
+
 export function listBenchReviews(benchID: string): Promise<BenchReview[]> {
   return request<BenchReview[]>(`/benches/${benchID}/reviews`);
 }
