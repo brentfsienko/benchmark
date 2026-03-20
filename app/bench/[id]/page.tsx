@@ -11,7 +11,9 @@ import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
 
 const MAX_PHOTOS = 4;
-const MAX_PHOTO_BYTES = 1_500_000;
+const MAX_ORIGINAL_PHOTO_BYTES = 20_000_000;
+const MAX_PHOTO_BASE64_CHARS = 1_700_000;
+const MAX_IMAGE_DIMENSION = 1600;
 
 const RATING_LABELS: Record<string, string> = {
   "1": "hard pass",
@@ -59,6 +61,49 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Unable to decode image"));
+    };
+    image.src = url;
+  });
+}
+
+async function optimizePhotoForUpload(file: File): Promise<string> {
+  const image = await loadImageFromFile(file);
+  const maxEdge = Math.max(image.naturalWidth, image.naturalHeight) || 1;
+  let scale = Math.min(1, MAX_IMAGE_DIMENSION / maxEdge);
+  const qualities = [0.82, 0.74, 0.66, 0.58];
+
+  for (let sizeStep = 0; sizeStep < 3; sizeStep++) {
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Unable to process image");
+    ctx.drawImage(image, 0, 0, width, height);
+
+    for (const quality of qualities) {
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      if (dataUrl.length <= MAX_PHOTO_BASE64_CHARS) {
+        return dataUrl;
+      }
+    }
+    scale *= 0.8;
+  }
+  throw new Error("Photo is still too large after optimization");
 }
 
 function getMiniMapEmbedUrl(lat: number, lng: number): string {
@@ -139,14 +184,24 @@ export default function BenchDetailPage() {
     const toProcess = files.slice(0, remaining);
     const results: string[] = [];
     for (const file of toProcess) {
-      if (file.size > MAX_PHOTO_BYTES) {
-        setStatus(`${file.name} is too large (max 1.5 MB)`);
+      if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
+        setStatus(`${file.name} is too large (max 20 MB before optimization)`);
         continue;
       }
       try {
-        results.push(await fileToBase64(file));
+        const optimized = await optimizePhotoForUpload(file);
+        results.push(optimized);
       } catch {
-        setStatus(`could not read ${file.name}`);
+        try {
+          const fallback = await fileToBase64(file);
+          if (fallback.length <= MAX_PHOTO_BASE64_CHARS) {
+            results.push(fallback);
+          } else {
+            setStatus(`${file.name} is too large after optimization`);
+          }
+        } catch {
+          setStatus(`could not read ${file.name}`);
+        }
       }
     }
     setPhotos((prev) => [...prev, ...results]);
@@ -440,22 +495,27 @@ export default function BenchDetailPage() {
                 </div>
               )}
               {photos.length < MAX_PHOTOS && (
-                <label
-                  style={{
-                    display: "inline-flex", alignItems: "center", gap: 6,
-                    padding: "8px 12px", borderRadius: "var(--radius)",
-                    border: "1px dashed var(--border)", cursor: "pointer",
-                    fontSize: 13, color: "var(--text-secondary)"
-                  }}
-                >
-                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <rect x={3} y={3} width={18} height={18} rx={2} />
-                    <circle cx={8.5} cy={8.5} r={1.5} />
-                    <path d="m21 15-5-5L5 21" />
-                  </svg>
-                  add photo
-                  <input type="file" accept="image/*" multiple onChange={onPhotosSelected} style={{ display: "none" }} />
-                </label>
+                <>
+                  <label
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "8px 12px", borderRadius: "var(--radius)",
+                      border: "1px dashed var(--border)", cursor: "pointer",
+                      fontSize: 13, color: "var(--text-secondary)"
+                    }}
+                  >
+                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <rect x={3} y={3} width={18} height={18} rx={2} />
+                      <circle cx={8.5} cy={8.5} r={1.5} />
+                      <path d="m21 15-5-5L5 21" />
+                    </svg>
+                    add photo
+                    <input type="file" accept="image/*" multiple onChange={onPhotosSelected} style={{ display: "none" }} />
+                  </label>
+                  <p className="muted" style={{ margin: "6px 0 0", fontSize: 11 }}>
+                    iPhone photos are auto-optimized before upload.
+                  </p>
+                </>
               )}
             </div>
 
