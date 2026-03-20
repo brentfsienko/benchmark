@@ -1,10 +1,11 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 
-export default function AuthErrorPage() {
+function AuthErrorContent() {
   const searchParams = useSearchParams();
   const message = searchParams.get("message") ?? "Something went wrong";
 
@@ -19,5 +20,13 @@ export default function AuthErrorPage() {
         try again
       </Link>
     </section>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={<section className="screen"><p className="muted">loading…</p></section>}>
+      <AuthErrorContent />
+    </Suspense>
   );
 }
