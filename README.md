@@ -2,7 +2,6 @@
 
 Mobile-first PWA for discovering and logging park benches. Next.js + Supabase.
 
-
 ## Local Run
 
 1. `npm install`
