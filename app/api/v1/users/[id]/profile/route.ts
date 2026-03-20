@@ -99,9 +99,27 @@ export async function PATCH(
 
     const supabase = createSupabaseServer();
 
+    if (typeof updates.username === "string") {
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id")
+        .eq("username", updates.username)
+        .neq("id", id)
+        .maybeSingle();
+      if (existing) {
+        return jsonError("Username is already taken", "validation_error", 409);
+      }
+    }
+
     if (Object.keys(updates).length > 0) {
       const { error } = await supabase.from("users").update(updates).eq("id", id);
-      if (error) return jsonError("Unable to update profile", "internal_error", 500);
+      if (error) {
+        const message = (error.message || "").toLowerCase();
+        if (message.includes("users_username_key") || message.includes("duplicate key")) {
+          return jsonError("Username is already taken", "validation_error", 409);
+        }
+        return jsonError("Unable to update profile", "internal_error", 500);
+      }
     }
 
     const { data: user } = await supabase

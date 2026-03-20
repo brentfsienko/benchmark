@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
+import { isAdminEmail } from "@/src/lib/admin";
 
 type AuthContextValue = {
   user: User | null;
@@ -11,8 +12,6 @@ type AuthContextValue = {
   isAdmin: boolean;
   signOut: () => Promise<void>;
 };
-
-const ADMIN_EMAIL = "brentfsienko@gmail.com";
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
@@ -25,6 +24,7 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [isAdminFromServer, setIsAdminFromServer] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
@@ -32,9 +32,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch("/api/v1/auth/me");
       const json = await res.json();
       const id = json?.data?.profileId ?? process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1";
+      const nextIsAdmin = Boolean(json?.data?.isAdmin);
       setProfileId(id);
+      setIsAdminFromServer(nextIsAdmin);
     } catch {
       setProfileId(process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1");
+      setIsAdminFromServer(false);
     } finally {
       setLoading(false);
     }
@@ -61,10 +64,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfileId(process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1");
+    setIsAdminFromServer(false);
     window.location.href = "/";
   }, []);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = isAdminFromServer || isAdminEmail(user?.email ?? null);
 
   return (
     <AuthContext.Provider value={{ user, profileId, loading, isAdmin, signOut }}>

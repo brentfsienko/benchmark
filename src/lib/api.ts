@@ -81,6 +81,13 @@ export function createBench(payload: Partial<Bench>): Promise<Bench> {
   });
 }
 
+export function updateBenchLocation(benchID: string, latitude: number, longitude: number): Promise<Bench> {
+  return request<Bench>(`/benches/${benchID}`, {
+    method: "PATCH",
+    body: JSON.stringify({ latitude, longitude })
+  });
+}
+
 export async function submitBenchmark(
   benchID: string,
   payload: { rating: number; body: string; photoBase64Items?: string[]; userId?: string }

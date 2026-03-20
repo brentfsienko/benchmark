@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createBench, getProfile, listNearbyBenches } from "@/src/lib/api";
+import { createBench, getProfile, listNearbyBenches, updateBenchLocation } from "@/src/lib/api";
 import type { Bench } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { ExploreMap } from "@/src/components/explore-map";
@@ -31,6 +31,13 @@ const TrashIcon = () => (
   </svg>
 );
 
+const MoveIcon = () => (
+  <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v20M2 12h20" />
+    <path d="m8 6 4-4 4 4M8 18l4 4 4-4M6 8l-4 4 4 4M18 8l4 4-4 4" />
+  </svg>
+);
+
 type ExploreFilters = {
   minRating?: number;
   types?: string[];
@@ -54,6 +61,7 @@ export default function ExplorePage() {
   const [selectedBenchID, setSelectedBenchID] = useState<string | null>(null);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [addMode, setAddMode] = useState(false);
+  const [moveMode, setMoveMode] = useState(false);
   const [tempPlacement, setTempPlacement] = useState<{ lat: number; lng: number } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [addStatus, setAddStatus] = useState<string | null>(null);
@@ -164,8 +172,17 @@ export default function ExplorePage() {
 
   const handlePlusClick = useCallback(() => {
     setAddMode(true);
+    setMoveMode(false);
     setTempPlacement(null);
   }, []);
+
+  const handleMoveClick = useCallback(() => {
+    if (!selectedBench) return;
+    setMoveMode(true);
+    setAddMode(false);
+    setAddStatus(null);
+    setTempPlacement({ lat: selectedBench.latitude, lng: selectedBench.longitude });
+  }, [selectedBench]);
 
   const handleConfirmAdd = useCallback(() => {
     if (!tempPlacement) return;
@@ -177,9 +194,28 @@ export default function ExplorePage() {
 
   const handleCancelAdd = useCallback(() => {
     setAddMode(false);
+    setMoveMode(false);
     setTempPlacement(null);
     setShowAddForm(false);
   }, []);
+
+  const handleConfirmMove = useCallback(async () => {
+    if (!tempPlacement || !selectedBenchID) return;
+    try {
+      const updated = await updateBenchLocation(selectedBenchID, tempPlacement.lat, tempPlacement.lng);
+      setAddStatus(`moved ${updated.name}`);
+      trackEvent({ name: "bench_moved", benchId: selectedBenchID });
+      await refresh(filters);
+      setTimeout(() => {
+        setAddMode(false);
+        setMoveMode(false);
+        setTempPlacement(null);
+        setAddStatus(null);
+      }, 1200);
+    } catch (err) {
+      setAddStatus(err instanceof Error ? err.message : "unable to move bench");
+    }
+  }, [tempPlacement, selectedBenchID, refresh, filters]);
 
   const handleAddSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
@@ -232,7 +268,7 @@ export default function ExplorePage() {
           selectedBenchID={selectedBenchID}
           onSelectBench={handleSelectFromMap}
           onMapReady={handleMapReady}
-          addMode={addMode}
+          addMode={addMode || moveMode}
           tempPlacement={tempPlacement}
           onMapClick={handleMapClick}
           benchmarkedBenchIDs={benchmarkedIDs}
@@ -356,24 +392,48 @@ export default function ExplorePage() {
           alignItems: "center"
         }}
       >
-        {!addMode ? (
+        {!addMode && !moveMode ? (
           isAdmin && (
-            <button
-              type="button"
-              className="button-primary"
-              onClick={handlePlusClick}
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: "50%",
-                display: "grid",
-                placeItems: "center",
-                boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-              }}
-              aria-label="Add bench"
-            >
-              <PlusIcon />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleMoveClick}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  background: "var(--surface)",
+                  border: "2px solid var(--border)",
+                  color: "var(--text-primary)",
+                  cursor: selectedBench ? "pointer" : "not-allowed",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  opacity: selectedBench ? 1 : 0.5
+                }}
+                disabled={!selectedBench}
+                aria-label="Move selected bench"
+                title={selectedBench ? "Move selected bench pin" : "Select a bench first"}
+              >
+                <MoveIcon />
+              </button>
+              <button
+                type="button"
+                className="button-primary"
+                onClick={handlePlusClick}
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                }}
+                aria-label="Add bench"
+              >
+                <PlusIcon />
+              </button>
+            </>
           )
         ) : (
           <>
@@ -399,7 +459,7 @@ export default function ExplorePage() {
             <button
               type="button"
               className="button-primary"
-              onClick={handleConfirmAdd}
+              onClick={addMode ? handleConfirmAdd : handleConfirmMove}
               disabled={!tempPlacement}
               style={{
                 width: 48,
@@ -420,7 +480,7 @@ export default function ExplorePage() {
       </div>
 
       {/* Add mode hint */}
-      {addMode && (
+      {(addMode || moveMode) && (
         <div
           style={{
             position: "absolute",
@@ -436,7 +496,29 @@ export default function ExplorePage() {
             textAlign: "center"
           }}
         >
-          tap the map to place your bench
+          {addMode
+            ? "tap the map to place your new bench"
+            : `tap map to reposition ${selectedBench?.name ?? "bench"}`}
+        </div>
+      )}
+
+      {moveMode && addStatus && (
+        <div
+          style={{
+            position: "absolute",
+            left: 16,
+            right: 16,
+            top: 114,
+            zIndex: 2,
+            padding: "8px 12px",
+            background: "rgba(45,106,79,0.92)",
+            color: "#f7f1e8",
+            borderRadius: "var(--radius)",
+            fontSize: 12,
+            textAlign: "center"
+          }}
+        >
+          {addStatus}
         </div>
       )}
 

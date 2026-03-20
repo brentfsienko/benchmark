@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { isRequestAdmin } from "@/src/lib/admin-access";
 import type { Bench } from "@/src/lib/types";
 
 const DEFAULT_USER_ID = "user-1";
@@ -8,6 +9,9 @@ const DEFAULT_USER_ID = "user-1";
 export async function POST(request: NextRequest) {
   if (!hasSupabase()) {
     return jsonError("Database not configured", "internal_error", 503);
+  }
+  if (!(await isRequestAdmin())) {
+    return jsonError("Admin access required", "forbidden", 403);
   }
   try {
     const body = await request.json();
