@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { getRequestActor } from "@/src/lib/request-auth";
 
-const DEFAULT_USER_ID = "user-1";
+const ALLOWED_TARGET_TYPES = new Set(["bench", "review", "user"]);
+const MAX_REASON_CHARS = 500;
 
 export async function POST(request: NextRequest) {
   if (!hasSupabase()) {
@@ -10,13 +12,24 @@ export async function POST(request: NextRequest) {
   }
   try {
     const body = await request.json().catch(() => ({}));
-    const reporterUserId = String(body.reporterUserId ?? body.reporter_user_id ?? DEFAULT_USER_ID).trim() || DEFAULT_USER_ID;
+    const actor = await getRequestActor();
+    const reporterUserId = actor?.profileId ?? "";
+    if (!reporterUserId) return jsonError("Authentication required", "unauthorized", 401);
     const targetType = String(body.targetType ?? body.target_type ?? "").trim();
     const targetId = String(body.targetId ?? body.target_id ?? "").trim();
     const reason = String(body.reason ?? "").trim();
 
     if (!targetType || !targetId || !reason) {
       return jsonError("targetType, targetId, and reason are required", "validation_error", 422);
+    }
+    if (!ALLOWED_TARGET_TYPES.has(targetType)) {
+      return jsonError("Invalid targetType", "validation_error", 422);
+    }
+    if (targetId.length > 120) {
+      return jsonError("targetId is too long", "validation_error", 422);
+    }
+    if (reason.length > MAX_REASON_CHARS) {
+      return jsonError(`Reason must be ${MAX_REASON_CHARS} characters or fewer`, "validation_error", 422);
     }
 
     const id = `report-${Date.now()}`;

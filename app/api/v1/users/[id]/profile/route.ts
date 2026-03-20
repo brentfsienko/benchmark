@@ -1,13 +1,17 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
 import type { UserProfile } from "@/src/lib/types";
 
 function buildProfile(
   user: Record<string, unknown>,
   benchmarked: string[],
-  wishlist: string[]
+  wishlist: string[],
+  options?: { includePrivateFields?: boolean; includeAvatarBase64?: boolean }
 ): UserProfile {
+  const includePrivateFields = options?.includePrivateFields ?? true;
+  const includeAvatarBase64 = options?.includeAvatarBase64 ?? true;
   return {
     id: String(user.id),
     displayName: String(user.display_name),
@@ -16,9 +20,9 @@ function buildProfile(
     isPublic: Boolean(user.is_public_profile ?? true),
     avatarSymbol: String(user.avatar_symbol || "person.crop.circle.fill"),
     avatarPhotoURL: String(user.avatar_photo_url ?? ""),
-    avatarPhotoBase64: String(user.avatar_photo_base64 ?? ""),
-    benchmarkedBenchIDs: benchmarked,
-    wishlistBenchIDs: wishlist
+    avatarPhotoBase64: includeAvatarBase64 ? String(user.avatar_photo_base64 ?? "") : "",
+    benchmarkedBenchIDs: includePrivateFields ? benchmarked : [],
+    wishlistBenchIDs: includePrivateFields ? wishlist : []
   };
 }
 
@@ -41,6 +45,7 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    const actor = await getRequestActor();
     const supabase = createSupabaseServer();
 
     const { data: user, error } = await supabase
@@ -53,8 +58,19 @@ export async function GET(
       return jsonError("User not found", "user_not_found", 404);
     }
 
+    const viewerIsSelfOrAdmin = Boolean(actor?.profileId) && requireSelfOrAdmin(actor!, id);
+    const isPublic = Boolean(user.is_public_profile ?? true);
+    if (!isPublic && !viewerIsSelfOrAdmin) {
+      return jsonError("Profile is private", "forbidden", 403);
+    }
+
     const { benchmarked, wishlist } = await loadBenchmarkedAndWishlist(supabase, id);
-    return jsonData(buildProfile(user, benchmarked, wishlist));
+    return jsonData(
+      buildProfile(user, benchmarked, wishlist, {
+        includePrivateFields: viewerIsSelfOrAdmin,
+        includeAvatarBase64: viewerIsSelfOrAdmin
+      })
+    );
   } catch (err) {
     return jsonError("Unable to load profile", "internal_error", 500);
   }
@@ -69,6 +85,10 @@ export async function PATCH(
   }
   try {
     const { id } = await params;
+    const actor = await getRequestActor();
+    if (!actor?.profileId) return jsonError("Authentication required", "unauthorized", 401);
+    if (!requireSelfOrAdmin(actor, id)) return jsonError("Forbidden", "forbidden", 403);
+
     const body = await request.json().catch(() => ({}));
 
     const updates: Record<string, unknown> = {};

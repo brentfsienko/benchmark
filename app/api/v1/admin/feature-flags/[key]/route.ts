@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { isRequestAdmin } from "@/src/lib/admin-access";
 
 export async function GET(
   _request: NextRequest,
@@ -34,6 +35,9 @@ export async function PUT(
 ) {
   if (!hasSupabase()) {
     return jsonError("Database not configured", "internal_error", 503);
+  }
+  if (!(await isRequestAdmin())) {
+    return jsonError("Admin access required", "forbidden", 403);
   }
   try {
     const { key } = await params;

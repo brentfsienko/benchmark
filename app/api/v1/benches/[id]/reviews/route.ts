@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { getRequestActor } from "@/src/lib/request-auth";
 import type { BenchReview } from "@/src/lib/types";
 
 const FALLBACK_AUTHOR = "community member";
-const DEFAULT_USER_ID = "user-1";
-const DEFAULT_AUTHOR = "Keith Backdoor";
-
+const MAX_REVIEW_BODY_CHARS = 1000;
+const MAX_PHOTOS_PER_REVIEW = 4;
+const MAX_PHOTO_BASE64_CHARS = 2_000_000;
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -71,20 +72,32 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const userId = String(body.userId ?? body.user_id ?? DEFAULT_USER_ID).trim() || DEFAULT_USER_ID;
+    const actor = await getRequestActor();
+    const userId = actor?.profileId ?? "";
+    if (!userId) return jsonError("Authentication required", "unauthorized", 401);
     const rating = Number(body.rating);
     const reviewBody = String(body.body ?? "").trim();
-    const photoBase64Items = Array.isArray(body.photoBase64Items) ? body.photoBase64Items : [];
+    const photoBase64ItemsRaw = Array.isArray(body.photoBase64Items) ? body.photoBase64Items : [];
+    const photoBase64Items: string[] = photoBase64ItemsRaw.map((p: unknown) => String(p));
 
-    if (rating < 0 || rating > 5) {
+    if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
       return jsonError("Rating must be between 0 and 5", "validation_error", 422);
+    }
+    if (reviewBody.length > MAX_REVIEW_BODY_CHARS) {
+      return jsonError(`Review must be ${MAX_REVIEW_BODY_CHARS} characters or fewer`, "validation_error", 422);
+    }
+    if (photoBase64Items.length > MAX_PHOTOS_PER_REVIEW) {
+      return jsonError(`Maximum ${MAX_PHOTOS_PER_REVIEW} photos per review`, "validation_error", 422);
+    }
+    if (photoBase64Items.some((p) => p.length > MAX_PHOTO_BASE64_CHARS)) {
+      return jsonError("One or more photos are too large", "validation_error", 422);
     }
 
     const reviewId = `review-${Date.now()}`;
     const supabase = createSupabaseServer();
 
     const { data: userRow } = await supabase.from("users").select("display_name").eq("id", userId).single();
-    const author = userRow?.display_name || (userId === DEFAULT_USER_ID ? DEFAULT_AUTHOR : "community member");
+    const author = userRow?.display_name || FALLBACK_AUTHOR;
 
     const { error } = await supabase.from("bench_reviews").insert({
       id: reviewId,

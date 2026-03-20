@@ -1,8 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
-
-const DEFAULT_USER_ID = "user-1";
+import { getRequestActor } from "@/src/lib/request-auth";
 
 export async function POST(
   request: NextRequest,
@@ -13,8 +12,10 @@ export async function POST(
   }
   try {
     const { id } = await params;
-    const body = await request.json().catch(() => ({}));
-    const userId = String(body.userId ?? body.user_id ?? DEFAULT_USER_ID).trim() || DEFAULT_USER_ID;
+    await request.json().catch(() => ({}));
+    const actor = await getRequestActor();
+    const userId = actor?.profileId ?? "";
+    if (!userId) return jsonError("Authentication required", "unauthorized", 401);
 
     const supabase = createSupabaseServer();
     const { error } = await supabase.from("challenge_participants").upsert(

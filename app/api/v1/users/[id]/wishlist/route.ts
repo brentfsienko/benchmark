@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
 
 export async function GET(
   _request: NextRequest,
@@ -35,6 +36,10 @@ export async function POST(
   }
   try {
     const { id } = await params;
+    const actor = await getRequestActor();
+    if (!actor?.profileId) return jsonError("Authentication required", "unauthorized", 401);
+    if (!requireSelfOrAdmin(actor, id)) return jsonError("Forbidden", "forbidden", 403);
+
     const body = await request.json().catch(() => ({}));
     const benchId = String(body.benchId ?? body.bench_id ?? "").trim();
     if (!benchId) return jsonError("benchId is required", "validation_error", 422);
