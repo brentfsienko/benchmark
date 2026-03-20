@@ -7,6 +7,24 @@ import type { Bench } from "@/src/lib/types";
 const VOLUNTEER_PARK_CENTER = { lat: 47.6298, lng: -122.3142 } as const;
 const DEFAULT_ZOOM = 16;
 
+function benchPinSvg(selected: boolean): string {
+  const size = selected ? 32 : 24;
+  const fill = selected ? "#2d6a4f" : "#f7f1e8";
+  const stroke = selected ? "#23201b" : "#dacfbf";
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+    <circle cx="12" cy="12" r="3.5" fill="${selected ? "#f7f1e8" : "#2d6a4f"}"/>
+  </svg>`;
+}
+
+function tempPinSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" fill="#2d6a4f" stroke="#23201b" stroke-width="2"/>
+    <line x1="12" y1="7" x2="12" y2="17" stroke="#f7f1e8" stroke-width="2.5" stroke-linecap="round"/>
+    <line x1="7" y1="12" x2="17" y2="12" stroke="#f7f1e8" stroke-width="2.5" stroke-linecap="round"/>
+  </svg>`;
+}
+
 type ExploreMapProps = {
   benches: Bench[];
   selectedBenchID: string | null;
@@ -40,6 +58,17 @@ export function ExploreMap({
     if (!mounted || !mapRef.current || typeof window === "undefined") return;
 
     void import("leaflet").then((L) => {
+      // Fix Leaflet default icon paths broken by bundlers
+      const proto = L.default.Icon.Default.prototype;
+      if ("_getIconUrl" in proto) {
+        delete (proto as unknown as Record<string, unknown>)["_getIconUrl"];
+      }
+      L.default.Icon.Default.mergeOptions({
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
+      });
+
       const map = L.default.map(mapRef.current!, {
         center: [VOLUNTEER_PARK_CENTER.lat, VOLUNTEER_PARK_CENTER.lng],
         zoom: DEFAULT_ZOOM,
@@ -96,17 +125,7 @@ export function ExploreMap({
       if (tempPlacement) {
         const icon = L.default.divIcon({
           className: "bench-pin",
-          html: `<div style="
-            width:28px;
-            height:28px;
-            border-radius:50%;
-            background:#2d6a4f;
-            border:2px solid #23201b;
-            display:grid;
-            place-items:center;
-            font-size:14px;
-            box-shadow:0 2px 8px rgba(0,0,0,0.2);
-          ">📍</div>`,
+          html: tempPinSvg(),
           iconSize: [28, 28],
           iconAnchor: [14, 28]
         });
@@ -126,22 +145,12 @@ export function ExploreMap({
 
       benches.forEach((bench) => {
         const isSelected = !addMode && bench.id === selectedBenchID;
+        const size = isSelected ? 32 : 24;
         const icon = L.default.divIcon({
           className: "bench-pin",
-          html: `<div style="
-            width:${isSelected ? 32 : 24}px;
-            height:${isSelected ? 32 : 24}px;
-            border-radius:50%;
-            background:${isSelected ? "#2d6a4f" : "#f7f1e8"};
-            border:2px solid ${isSelected ? "#23201b" : "#dacfbf"};
-            display:grid;
-            place-items:center;
-            font-size:12px;
-            padding-top:2px;
-            box-shadow:0 2px 8px rgba(0,0,0,0.12);
-          ">📍</div>`,
-          iconSize: [isSelected ? 32 : 24, isSelected ? 32 : 24],
-          iconAnchor: [isSelected ? 16 : 12, isSelected ? 32 : 24]
+          html: benchPinSvg(isSelected),
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size]
         });
 
         const marker = L.default.marker([bench.latitude, bench.longitude], { icon }).addTo(map);
