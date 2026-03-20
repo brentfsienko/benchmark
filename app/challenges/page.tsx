@@ -76,21 +76,18 @@ type UpcomingChallenge = {
   id: string;
   title: string;
   description: string;
-  launchLabel: string;
 };
 
 const UPCOMING_CHALLENGES: UpcomingChallenge[] = [
   {
     id: "challenge-arboretum-summer-2026",
     title: "Arboretum Bench Challenge",
-    description: "Explore the Arboretum path network and benchmark key waterside benches.",
-    launchLabel: "launching mid summer 2026"
+    description: "Explore the Arboretum path network and benchmark key waterside benches."
   },
   {
     id: "challenge-seattle-scavenger-summer-2026",
     title: "Seattle Scavenger Hunt",
-    description: "A city-wide hunt across hidden benches with clue-based check-ins.",
-    launchLabel: "launching late summer 2026"
+    description: "A city-wide hunt across hidden benches with clue-based check-ins."
   }
 ];
 
@@ -167,10 +164,15 @@ function ChallengesContent() {
 
   const now = new Date();
   const isCompletedByUser = completedBenches > 0 && totalBenches > 0 && completedBenches >= totalBenches;
-  const activeChallenges = allChallenges.filter((c) => c.isActive && new Date(c.startsAt) <= now && new Date(c.endsAt) >= now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser));
-  const inactiveUpcomingChallenges = allChallenges.filter((c) => new Date(c.startsAt) > now || (!c.isActive && new Date(c.endsAt) >= now));
-  const completedChallenges = allChallenges.filter((c) => c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser);
-  const pastChallenges = allChallenges.filter((c) => new Date(c.endsAt) < now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser));
+  const visibleChallenges = allChallenges.filter((c) => c.id !== "challenge-vp-summer-launch");
+  const activeChallenges = visibleChallenges.filter(
+    (c) => c.isActive && new Date(c.startsAt) <= now && new Date(c.endsAt) >= now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser)
+  );
+  const inactiveUpcomingChallenges = visibleChallenges.filter(
+    (c) => new Date(c.startsAt) > now || (!c.isActive && new Date(c.endsAt) >= now)
+  );
+  const completedChallenges = visibleChallenges.filter((c) => c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser);
+  const pastChallenges = visibleChallenges.filter((c) => new Date(c.endsAt) < now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser));
 
   const selectedChallenge = selectedChallengeId
     ? allChallenges.find((c) => c.id === selectedChallengeId) ?? null
@@ -231,7 +233,7 @@ function ChallengesContent() {
               <div key={c.id} className="surface-card" style={{ padding: 14, opacity: 0.55, borderLeft: "3px solid var(--border)" }}>
                 <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
                 <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
-                <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>{c.launchLabel}</p>
+                <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>date tbd</p>
               </div>
             ))}
           </div>
@@ -307,7 +309,7 @@ function ChallengesContent() {
         green lake challenge
       </h1>
       <p className="muted" style={{ margin: "0 0 4px", fontSize: 13 }}>
-        summer 2026 • benchmark every bench around the lake
+        trial season • benchmark every bench around the lake
       </p>
 
       {loading ? (
