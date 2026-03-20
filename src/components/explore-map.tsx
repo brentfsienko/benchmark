@@ -31,6 +31,13 @@ function tempPinSvg(): string {
   </svg>`;
 }
 
+function userLocationSvg(): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="7" fill="#3b82f6" fill-opacity="0.22" />
+    <circle cx="12" cy="12" r="4.5" fill="#3b82f6" stroke="#ffffff" stroke-width="2"/>
+  </svg>`;
+}
+
 type ExploreMapProps = {
   benches: Bench[];
   selectedBenchID: string | null;
@@ -59,6 +66,8 @@ export function ExploreMap({
   const markersRef = useRef<Marker[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
   const vpMarkerRef = useRef<Marker | null>(null);
+  const userMarkerRef = useRef<Marker | null>(null);
+  const geoWatchIDRef = useRef<number | null>(null);
   const [mounted, setMounted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
@@ -111,9 +120,54 @@ export function ExploreMap({
       tempMarkerRef.current = null;
       vpMarkerRef.current?.remove();
       vpMarkerRef.current = null;
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
+      if (geoWatchIDRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(geoWatchIDRef.current);
+        geoWatchIDRef.current = null;
+      }
       setMapReady(false);
     };
   }, [mounted, onMapReady]);
+
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current || typeof window === "undefined") return;
+    if (!("geolocation" in navigator)) return;
+
+    void import("leaflet").then((L) => {
+      const icon = L.default.divIcon({
+        className: "bench-pin",
+        html: userLocationSvg(),
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+      });
+
+      geoWatchIDRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (!userMarkerRef.current) {
+            userMarkerRef.current = L.default.marker([lat, lng], { icon, interactive: false }).addTo(mapInstanceRef.current!);
+            return;
+          }
+          userMarkerRef.current.setLatLng([lat, lng]);
+        },
+        () => {},
+        {
+          enableHighAccuracy: true,
+          maximumAge: 15000,
+          timeout: 10000
+        }
+      );
+    });
+
+    return () => {
+      if (geoWatchIDRef.current !== null && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(geoWatchIDRef.current);
+        geoWatchIDRef.current = null;
+      }
+    };
+  }, [mapReady]);
 
   // VP "coming soon" marker -- only when fog is on
   useEffect(() => {

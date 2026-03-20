@@ -9,6 +9,7 @@ import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
+import { MiniBenchMap } from "@/src/components/mini-bench-map";
 
 const MAX_PHOTOS = 4;
 const MAX_ORIGINAL_PHOTO_BYTES = 20_000_000;
@@ -104,15 +105,6 @@ async function optimizePhotoForUpload(file: File): Promise<string> {
     scale *= 0.8;
   }
   throw new Error("Photo is still too large after optimization");
-}
-
-function getMiniMapEmbedUrl(lat: number, lng: number): string {
-  const delta = 0.0028;
-  const left = lng - delta;
-  const right = lng + delta;
-  const top = lat + delta;
-  const bottom = lat - delta;
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${lat}%2C${lng}`;
 }
 
 export default function BenchDetailPage() {
@@ -288,12 +280,7 @@ export default function BenchDetailPage() {
               </Link>
             </div>
             <div style={{ borderRadius: "calc(var(--radius) - 2px)", overflow: "hidden", border: "1px solid var(--border)", height: 160 }}>
-              <iframe
-                title={`Map for ${bench.name}`}
-                src={getMiniMapEmbedUrl(bench.latitude, bench.longitude)}
-                style={{ width: "100%", height: "100%", border: "none" }}
-                loading="lazy"
-              />
+              <MiniBenchMap latitude={bench.latitude} longitude={bench.longitude} markerLabel={bench.name} />
             </div>
           </section>
 
