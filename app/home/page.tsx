@@ -21,12 +21,17 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export default function HomePage() {
-  const { profileId } = useAuth();
+  const { profileId, user } = useAuth();
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user || !profileId) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
     const id = profileId ?? "user-1";
     listActivity(id, { feed: Boolean(profileId) })
       .then((next) => {
@@ -35,14 +40,22 @@ export default function HomePage() {
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [profileId]);
+  }, [profileId, user]);
 
   return (
     <section className="screen">
       <SectionHeader title="home" subtitle="your recent benchmarks" />
+      {!user && (
+        <div className="surface-card" style={{ padding: 20 }}>
+          <p className="muted" style={{ margin: "0 0 12px" }}>sign in to view your feed</p>
+          <Link href="/auth/login" className="button-primary" style={{ display: "inline-block" }}>
+            sign in
+          </Link>
+        </div>
+      )}
       {loading ? <p className="muted">loading feed…</p> : null}
       {error ? <p style={{ color: "var(--danger)" }}>{error}</p> : null}
-      {!loading && items.length === 0 && !error && (
+      {!user ? null : !loading && items.length === 0 && !error && (
         <div className="surface-card" style={{ padding: 24, textAlign: "center" }}>
           <p style={{ fontSize: 32, margin: "0 0 12px" }}>🪑</p>
           <p style={{ margin: "0 0 8px", fontWeight: 600 }}>no benchmarks yet</p>
@@ -55,7 +68,7 @@ export default function HomePage() {
         </div>
       )}
       <div style={{ display: "grid", gap: "var(--space-3)" }}>
-        {items.map((item) => (
+        {user && items.map((item) => (
           <Link key={item.id} href={`/bench/${item.benchId}`} style={{ display: "block" }}>
             <article className="surface-card" style={{ padding: "var(--space-4)", transition: "transform 0.15s", cursor: "pointer" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>

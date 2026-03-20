@@ -205,23 +205,38 @@ function ChallengesContent() {
       <section className="screen">
         <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>play</h1>
         <p className="muted" style={{ marginTop: 0 }}>choose a challenge</p>
+        {!profileId && (
+          <div className="surface-card" style={{ padding: 12, marginBottom: 8 }}>
+            <p style={{ margin: 0, fontSize: 12 }}>
+              sign in to open challenge details and track your progress.
+            </p>
+          </div>
+        )}
 
         <section>
           <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>active</h2>
           <div style={{ display: "grid", gap: 8 }}>
             {activeChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no active challenges</p> : null}
             {activeChallenges.map((c) => (
-              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
-                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)" }}>
+              profileId ? (
+                <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                  <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)" }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                    {c.id === GREEN_LAKE_CHALLENGE_ID && (
+                      <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
+                        your progress: {completedBenches}/{Math.max(totalBenches, 8)}
+                      </p>
+                    )}
+                  </div>
+                </Link>
+              ) : (
+                <div key={c.id} className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)", opacity: 0.75 }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
-                  {c.id === GREEN_LAKE_CHALLENGE_ID && (
-                    <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
-                      your progress: {completedBenches}/{Math.max(totalBenches, 8)}
-                    </p>
-                  )}
+                  <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>sign in to open</p>
                 </div>
-              </Link>
+              )
             ))}
           </div>
         </section>
@@ -230,15 +245,25 @@ function ChallengesContent() {
           <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>upcoming / inactive</h2>
           <div style={{ display: "grid", gap: 8 }}>
             {inactiveUpcomingChallenges.map((c) => (
-              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
-                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--border)" }}>
+              profileId ? (
+                <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                  <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--border)" }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                    <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
+                      starts {new Date(c.startsAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </Link>
+              ) : (
+                <div key={c.id} className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--border)", opacity: 0.75 }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
                   <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
-                    starts {new Date(c.startsAt).toLocaleDateString()}
+                    starts {new Date(c.startsAt).toLocaleDateString()} • sign in to open
                   </p>
                 </div>
-              </Link>
+              )
             ))}
             {UPCOMING_CHALLENGES.map((c) => (
               <div key={c.id} className="surface-card" style={{ padding: 14, opacity: 0.55, borderLeft: "3px solid var(--border)" }}>
@@ -255,12 +280,20 @@ function ChallengesContent() {
           <div style={{ display: "grid", gap: 8 }}>
             {completedChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no completed challenges yet</p> : null}
             {completedChallenges.map((c) => (
-              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
-                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)", background: "var(--accent-soft)" }}>
+              profileId ? (
+                <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                  <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)", background: "var(--accent-soft)" }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title} ✅</p>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                  </div>
+                </Link>
+              ) : (
+                <div key={c.id} className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)", background: "var(--accent-soft)", opacity: 0.75 }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title} ✅</p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                  <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>sign in to open</p>
                 </div>
-              </Link>
+              )
             ))}
           </div>
         </section>
@@ -270,18 +303,43 @@ function ChallengesContent() {
           <div style={{ display: "grid", gap: 8 }}>
             {pastChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no past challenges</p> : null}
             {pastChallenges.map((c) => (
-              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
-                <div className="surface-card" style={{ padding: 14, opacity: 0.8, borderLeft: "3px solid var(--border)" }}>
+              profileId ? (
+                <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                  <div className="surface-card" style={{ padding: 14, opacity: 0.8, borderLeft: "3px solid var(--border)" }}>
+                    <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                    <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                    <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
+                      ended {new Date(c.endsAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                </Link>
+              ) : (
+                <div key={c.id} className="surface-card" style={{ padding: 14, opacity: 0.65, borderLeft: "3px solid var(--border)" }}>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
                   <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
-                    ended {new Date(c.endsAt).toLocaleDateString()}
+                    ended {new Date(c.endsAt).toLocaleDateString()} • sign in to open
                   </p>
                 </div>
-              </Link>
+              )
             ))}
           </div>
         </section>
+      </section>
+    );
+  }
+
+  if (!profileId && !showLanding) {
+    return (
+      <section className="screen">
+        <h1 style={{ marginTop: 0, textTransform: "lowercase" }}>sign in required</h1>
+        <p className="muted">sign in to open individual challenge pages and progress.</p>
+        <Link href="/auth/login" className="button-primary" style={{ display: "inline-block", marginRight: 8 }}>
+          sign in
+        </Link>
+        <Link href="/challenges" className="button-secondary" style={{ display: "inline-block" }}>
+          back
+        </Link>
       </section>
     );
   }

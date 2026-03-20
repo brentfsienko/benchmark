@@ -57,6 +57,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const { profileId, user } = useAuth();
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const visibleLinks = user ? links : links.filter((item) => item.href !== "/home");
 
   useEffect(() => {
     if (!user || !profileId) {
@@ -69,8 +70,12 @@ export function BottomNav() {
   }, [profileId, user, pathname]);
 
   return (
-    <nav className="bottom-nav" aria-label="Primary">
-      {links.map((item) => {
+    <nav
+      className="bottom-nav"
+      aria-label="Primary"
+      style={{ gridTemplateColumns: `repeat(${visibleLinks.length}, minmax(0, 1fr))` }}
+    >
+      {visibleLinks.map((item) => {
         const active = pathname?.startsWith(item.href);
         const Icon = item.icon;
         const isProfileLink = item.href === "/profile";
