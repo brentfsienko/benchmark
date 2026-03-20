@@ -3,14 +3,14 @@
 
 UPDATE benches
 SET geom = CASE id
-  WHEN 'bench-gl-1' THEN ST_SetSRID(ST_MakePoint(-122.3352, 47.6843), 4326)::geography
-  WHEN 'bench-gl-2' THEN ST_SetSRID(ST_MakePoint(-122.3237, 47.6842), 4326)::geography
-  WHEN 'bench-gl-3' THEN ST_SetSRID(ST_MakePoint(-122.3191, 47.6806), 4326)::geography
-  WHEN 'bench-gl-4' THEN ST_SetSRID(ST_MakePoint(-122.3216, 47.6766), 4326)::geography
-  WHEN 'bench-gl-5' THEN ST_SetSRID(ST_MakePoint(-122.3289, 47.6750), 4326)::geography
-  WHEN 'bench-gl-6' THEN ST_SetSRID(ST_MakePoint(-122.3354, 47.6763), 4326)::geography
-  WHEN 'bench-gl-7' THEN ST_SetSRID(ST_MakePoint(-122.3382, 47.6802), 4326)::geography
-  WHEN 'bench-gl-8' THEN ST_SetSRID(ST_MakePoint(-122.3367, 47.6829), 4326)::geography
+  WHEN 'bench-gl-1' THEN ST_SetSRID(ST_MakePoint(-122.3308, 47.6846), 4326)::geography
+  WHEN 'bench-gl-2' THEN ST_SetSRID(ST_MakePoint(-122.3200, 47.6808), 4326)::geography
+  WHEN 'bench-gl-3' THEN ST_SetSRID(ST_MakePoint(-122.3276, 47.6750), 4326)::geography
+  WHEN 'bench-gl-4' THEN ST_SetSRID(ST_MakePoint(-122.3379, 47.6798), 4326)::geography
+  WHEN 'bench-gl-5' THEN ST_SetSRID(ST_MakePoint(-122.3235, 47.6838), 4326)::geography
+  WHEN 'bench-gl-6' THEN ST_SetSRID(ST_MakePoint(-122.3344, 47.6842), 4326)::geography
+  WHEN 'bench-gl-7' THEN ST_SetSRID(ST_MakePoint(-122.3363, 47.6766), 4326)::geography
+  WHEN 'bench-gl-8' THEN ST_SetSRID(ST_MakePoint(-122.3195, 47.6823), 4326)::geography
   ELSE geom
 END
 WHERE id IN (
