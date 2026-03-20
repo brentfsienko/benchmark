@@ -19,11 +19,13 @@ export default function SignupPage() {
     setStatus(null);
     try {
       const supabase = createSupabaseBrowser();
+      const redirectTo = `${window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { display_name: displayName.trim(), username: username.trim().toLowerCase() }
+          data: { display_name: displayName.trim(), username: username.trim().toLowerCase() },
+          emailRedirectTo: redirectTo
         }
       });
       if (error) {

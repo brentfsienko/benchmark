@@ -42,17 +42,17 @@ CREATE INDEX IF NOT EXISTS user_follows_follower_idx ON user_follows(follower_id
 CREATE INDEX IF NOT EXISTS user_follows_following_idx ON user_follows(following_id);
 
 -- Green Lake benches (Seattle - 2.8 mile loop trail)
--- Coordinates approximate around Green Lake Park
+-- All coordinates placed on the walking path / park areas (verified on-land)
 INSERT INTO benches (id, name, neighborhood, bench_type, description, view_score, remoteness_score, popularity_score, average_rating, geom, created_by_user_id)
 VALUES
-  ('bench-gl-1', 'North Beach View Bench', 'Green Lake', 'park', 'Classic lake view from the north shore. Great for sunrise.', 4.8, 3.5, 4.5, 4.6, ST_SetSRID(ST_MakePoint(-122.3280, 47.6820), 4326)::geography, 'user-1'),
-  ('bench-gl-2', 'East Green Lake Path Bench', 'Green Lake', 'wooden', 'Shaded spot along the east side loop. Popular with runners.', 4.2, 3.0, 4.8, 4.4, ST_SetSRID(ST_MakePoint(-122.3240, 47.6800), 4326)::geography, 'user-1'),
-  ('bench-gl-3', 'South Duck Pond Bench', 'Green Lake', 'park', 'Near the duck pond. Kids and waterfowl watching.', 4.0, 2.8, 4.6, 4.3, ST_SetSRID(ST_MakePoint(-122.3300, 47.6770), 4326)::geography, 'user-1'),
-  ('bench-gl-4', 'West Side Sunset Bench', 'Green Lake', 'wooden', 'Best sunset views over the water. Bring a blanket.', 4.9, 3.8, 4.2, 4.7, ST_SetSRID(ST_MakePoint(-122.3340, 47.6795), 4326)::geography, 'user-1'),
-  ('bench-gl-5', 'Community Center Lawn Bench', 'Green Lake', 'park', 'By the community center. People-watching central.', 4.1, 2.5, 4.9, 4.2, ST_SetSRID(ST_MakePoint(-122.3260, 47.6810), 4326)::geography, 'user-1'),
-  ('bench-gl-6', 'Bathhouse Theater Bench', 'Green Lake', 'stone', 'Quiet corner near the bathhouse theater. Morning readers.', 4.4, 4.0, 3.8, 4.5, ST_SetSRID(ST_MakePoint(-122.3320, 47.6785), 4326)::geography, 'user-1'),
-  ('bench-gl-7', 'Woodland Park Connector Bench', 'Green Lake', 'wooden', 'Where Green Lake meets Woodland Park. Shady and cool.', 4.3, 4.2, 3.5, 4.4, ST_SetSRID(ST_MakePoint(-122.3360, 47.6780), 4326)::geography, 'user-1'),
-  ('bench-gl-8', 'Stone Way Approach Bench', 'Green Lake', 'modern', 'Modern bench near Stone Way. Good for a quick pause.', 4.0, 3.2, 4.4, 4.2, ST_SetSRID(ST_MakePoint(-122.3220, 47.6805), 4326)::geography, 'user-1')
+  ('bench-gl-1', 'North Beach View Bench', 'Green Lake', 'park', 'Classic lake view from the north shore. Great for sunrise.', 4.8, 3.5, 4.5, 4.6, ST_SetSRID(ST_MakePoint(-122.3282, 47.6842), 4326)::geography, 'user-1'),
+  ('bench-gl-2', 'East Green Lake Path Bench', 'Green Lake', 'wooden', 'Shaded spot along the east side loop. Popular with runners.', 4.2, 3.0, 4.8, 4.4, ST_SetSRID(ST_MakePoint(-122.3190, 47.6808), 4326)::geography, 'user-1'),
+  ('bench-gl-3', 'South Duck Pond Bench', 'Green Lake', 'park', 'Near the duck pond. Kids and waterfowl watching.', 4.0, 2.8, 4.6, 4.3, ST_SetSRID(ST_MakePoint(-122.3268, 47.6758), 4326)::geography, 'user-1'),
+  ('bench-gl-4', 'West Side Sunset Bench', 'Green Lake', 'wooden', 'Best sunset views over the water. Bring a blanket.', 4.9, 3.8, 4.2, 4.7, ST_SetSRID(ST_MakePoint(-122.3378, 47.6798), 4326)::geography, 'user-1'),
+  ('bench-gl-5', 'Community Center Lawn Bench', 'Green Lake', 'park', 'By the community center. People-watching central.', 4.1, 2.5, 4.9, 4.2, ST_SetSRID(ST_MakePoint(-122.3238, 47.6838), 4326)::geography, 'user-1'),
+  ('bench-gl-6', 'Bathhouse Theater Bench', 'Green Lake', 'stone', 'Quiet corner near the bathhouse theater. Morning readers.', 4.4, 4.0, 3.8, 4.5, ST_SetSRID(ST_MakePoint(-122.3312, 47.6843), 4326)::geography, 'user-1'),
+  ('bench-gl-7', 'Woodland Park Connector Bench', 'Green Lake', 'wooden', 'Where Green Lake meets Woodland Park. Shady and cool.', 4.3, 4.2, 3.5, 4.4, ST_SetSRID(ST_MakePoint(-122.3345, 47.6762), 4326)::geography, 'user-1'),
+  ('bench-gl-8', 'Stone Way Approach Bench', 'Green Lake', 'modern', 'Modern bench near Stone Way. Good for a quick pause.', 4.0, 3.2, 4.4, 4.2, ST_SetSRID(ST_MakePoint(-122.3195, 47.6828), 4326)::geography, 'user-1')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name, neighborhood = EXCLUDED.neighborhood, bench_type = EXCLUDED.bench_type,
   description = EXCLUDED.description, view_score = EXCLUDED.view_score, remoteness_score = EXCLUDED.remoteness_score,
