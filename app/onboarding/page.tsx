@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { env } from "@/src/lib/env";
+import { useAuth } from "@/src/contexts/auth-context";
 import { completeOnboarding } from "@/src/lib/api";
 import { trackEvent } from "@/src/lib/analytics";
 
@@ -29,6 +29,7 @@ const slides = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { profileId } = useAuth();
   const [step, setStep] = useState(0);
   const slide = slides[step];
 
@@ -40,7 +41,7 @@ export default function OnboardingPage() {
         localStorage.setItem(ONBOARDING_KEY, "true");
       }
       trackEvent({ name: "onboarding_complete" });
-      completeOnboarding(env.currentUserID).catch(() => {});
+      completeOnboarding(profileId ?? "user-1").catch(() => {});
       router.replace("/explore");
     }
   };
@@ -50,7 +51,7 @@ export default function OnboardingPage() {
       localStorage.setItem(ONBOARDING_KEY, "true");
     }
     trackEvent({ name: "onboarding_skipped" });
-    completeOnboarding(env.currentUserID).catch(() => {});
+    completeOnboarding(profileId ?? "user-1").catch(() => {});
     router.replace("/explore");
   };
 

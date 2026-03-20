@@ -109,7 +109,7 @@ export function completeOnboarding(userID: string): Promise<{ onboardingComplete
 
 export function updateProfile(
   userID: string,
-  payload: Partial<Pick<UserProfile, "displayName" | "bio" | "isPublic" | "avatarPhotoURL" | "avatarPhotoBase64">>
+  payload: Partial<Pick<UserProfile, "displayName" | "username" | "bio" | "isPublic" | "avatarPhotoURL" | "avatarPhotoBase64">>
 ): Promise<UserProfile> {
   return request<UserProfile>(`/users/${userID}/profile`, {
     method: "PATCH",
@@ -135,6 +135,28 @@ export function addWishlistItem(userID: string, benchID: string): Promise<void> 
 export function removeWishlistItem(userID: string, benchID: string): Promise<void> {
   return request<void>(`/users/${userID}/wishlist/${benchID}`, {
     method: "DELETE"
+  });
+}
+
+export function listFollowers(userID: string): Promise<string[]> {
+  return request<string[]>(`/users/${userID}/followers`);
+}
+
+export function listFollowing(userID: string): Promise<string[]> {
+  return request<string[]>(`/users/${userID}/following`);
+}
+
+export function followUser(followerId: string, targetId: string): Promise<{ followed: boolean }> {
+  return request<{ followed: boolean }>(`/users/${targetId}/follow`, {
+    method: "POST",
+    body: JSON.stringify({ followerId })
+  });
+}
+
+export function unfollowUser(followerId: string, targetId: string): Promise<{ unfollowed: boolean }> {
+  return request<{ unfollowed: boolean }>(`/users/${targetId}/unfollow`, {
+    method: "POST",
+    body: JSON.stringify({ followerId })
   });
 }
 

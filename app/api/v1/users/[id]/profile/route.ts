@@ -75,6 +75,12 @@ export async function PATCH(
       if (v.length > 280) return jsonError("Bio must be 280 characters or fewer", "validation_error", 422);
       updates.bio = v;
     }
+    if (body.username !== undefined) {
+      const v = String(body.username).trim().toLowerCase();
+      if (!/^[a-z0-9_]+$/.test(v)) return jsonError("Username: lowercase letters, numbers, underscores only", "validation_error", 422);
+      if (v.length < 2) return jsonError("Username must be at least 2 characters", "validation_error", 422);
+      updates.username = v;
+    }
     if (body.isPublic !== undefined) updates.is_public_profile = Boolean(body.isPublic);
     if (body.avatarSymbol !== undefined) updates.avatar_symbol = String(body.avatarSymbol).trim();
     if (body.avatarPhotoURL !== undefined) updates.avatar_photo_url = String(body.avatarPhotoURL).trim();

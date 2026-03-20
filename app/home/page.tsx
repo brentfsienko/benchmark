@@ -1,26 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { env } from "@/src/lib/env";
+import { useAuth } from "@/src/contexts/auth-context";
 import { listActivity } from "@/src/lib/api";
 import type { ActivityItem } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
 
 export default function HomePage() {
+  const { profileId } = useAuth();
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    listActivity(env.currentUserID)
+    const id = profileId ?? "user-1";
+    listActivity(id)
       .then((next) => {
         setItems(next);
-        trackEvent({ name: "home_feed_loaded", userId: env.currentUserID, metadata: { count: next.length } });
+        trackEvent({ name: "home_feed_loaded", userId: id, metadata: { count: next.length } });
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [profileId]);
 
   return (
     <section className="screen">

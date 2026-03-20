@@ -2,10 +2,11 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { createContentReport, getFeatureFlag, readReady, upsertFeatureFlag } from "@/src/lib/api";
-import { env } from "@/src/lib/env";
+import { useAuth } from "@/src/contexts/auth-context";
 import { SectionHeader } from "@/src/components/section-header";
 
 export default function OpsPage() {
+  const { profileId } = useAuth();
   const [ready, setReady] = useState("unknown");
   const [flag, setFlag] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export default function OpsPage() {
     event.preventDefault();
     try {
       const result = await createContentReport({
-        reporterUserId: env.currentUserID,
+        reporterUserId: profileId ?? "user-1",
         targetType: "bench",
         targetId: targetID,
         reason

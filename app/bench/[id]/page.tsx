@@ -4,12 +4,13 @@ import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
 import { addWishlistItem, getBench, listBenchReviews, submitBenchmark } from "@/src/lib/api";
 import type { Bench, BenchReview } from "@/src/lib/types";
-import { env } from "@/src/lib/env";
+import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 
 export default function BenchDetailPage() {
   const params = useParams<{ id: string }>();
+  const { profileId } = useAuth();
   const benchID = params.id;
   const [bench, setBench] = useState<Bench | null>(null);
   const [reviews, setReviews] = useState<BenchReview[]>([]);
@@ -30,12 +31,12 @@ export default function BenchDetailPage() {
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
-      await submitBenchmark(benchID, { rating: Number(rating), body, userId: env.currentUserID });
+      await submitBenchmark(benchID, { rating: Number(rating), body, userId: profileId ?? undefined });
       const next = await listBenchReviews(benchID);
       setReviews(next);
       setBody("");
       setStatus("benchmark submitted");
-      trackEvent({ name: "benchmark_submitted", userId: env.currentUserID, benchId: benchID });
+      trackEvent({ name: "benchmark_submitted", userId: profileId ?? "anonymous", benchId: benchID });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "unable to submit benchmark");
     }
@@ -57,9 +58,13 @@ export default function BenchDetailPage() {
             <button
               className="button-secondary"
               onClick={() => {
-                addWishlistItem(env.currentUserID, benchID)
-                  .then(() => setStatus("saved to wishlist"))
-                  .catch((err: Error) => setStatus(err.message));
+                if (profileId) {
+                  addWishlistItem(profileId, benchID)
+                    .then(() => setStatus("saved to wishlist"))
+                    .catch((err: Error) => setStatus(err.message));
+                } else {
+                  setStatus("sign in to save to wishlist");
+                }
               }}
             >
               save to wishlist

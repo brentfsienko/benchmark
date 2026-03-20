@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import { AuthProvider } from "@/src/contexts/auth-context";
 import { BottomNav } from "@/src/components/bottom-nav";
 
 export const metadata: Metadata = {
@@ -20,8 +21,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <main>{children}</main>
-        <BottomNav />
+        <AuthProvider>
+          <main>{children}</main>
+          <BottomNav />
+        </AuthProvider>
       </body>
     </html>
   );

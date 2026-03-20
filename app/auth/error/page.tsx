@@ -1,0 +1,23 @@
+"use client";
+
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { BenchmarkLogo } from "@/src/components/benchmark-logo";
+
+export default function AuthErrorPage() {
+  const searchParams = useSearchParams();
+  const message = searchParams.get("message") ?? "Something went wrong";
+
+  return (
+    <section className="screen">
+      <div style={{ marginBottom: 24 }}>
+        <BenchmarkLogo size={40} />
+      </div>
+      <h1 style={{ marginTop: 0 }}>auth error</h1>
+      <p className="muted">{message}</p>
+      <Link href="/auth/login" className="button-primary" style={{ display: "inline-block", marginTop: 16 }}>
+        try again
+      </Link>
+    </section>
+  );
+}
