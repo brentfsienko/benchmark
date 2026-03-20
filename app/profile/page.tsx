@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
-import { getProfile, listFollowers, listFollowing, listWishlist, removeWishlistItem, updateProfile } from "@/src/lib/api";
-import type { UserProfile } from "@/src/lib/types";
+import { getBench, getProfile, listFollowers, listFollowing, listWishlist, removeWishlistItem, updateProfile } from "@/src/lib/api";
+import type { Bench, UserProfile } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
 
@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [wishlist, setWishlist] = useState<string[]>([]);
+  const [wishlistBenches, setWishlistBenches] = useState<Record<string, Bench>>({});
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -39,6 +40,18 @@ export default function ProfilePage() {
       })
       .catch((err: Error) => setStatus(err.message));
   }, [profileId]);
+
+  useEffect(() => {
+    if (wishlist.length === 0) return;
+    const toFetch = wishlist.filter((id) => !wishlistBenches[id]);
+    if (toFetch.length === 0) return;
+    Promise.all(toFetch.map((id) => getBench(id).catch(() => null)))
+      .then((results) => {
+        const map: Record<string, Bench> = {};
+        results.forEach((b) => { if (b) map[b.id] = b; });
+        setWishlistBenches((prev) => ({ ...prev, ...map }));
+      });
+  }, [wishlist, wishlistBenches]);
 
   const enterEditMode = () => {
     if (!profile) return;
@@ -183,26 +196,67 @@ export default function ProfilePage() {
       )}
 
       <section className="surface-card" style={{ padding: 14 }}>
-        <h2 style={{ marginTop: 0, fontSize: 16 }}>wishlist</h2>
-        {wishlist.length === 0 ? <p className="muted">no benches saved yet</p> : null}
+        <h2 style={{ marginTop: 0, fontSize: 16 }}>
+          wishlist
+          {wishlist.length > 0 && (
+            <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>
+              ({wishlist.length})
+            </span>
+          )}
+        </h2>
+        {wishlist.length === 0 ? (
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            no benches saved yet — find one you love on the{" "}
+            <Link href="/explore" style={{ color: "var(--accent)", fontWeight: 600 }}>map</Link>
+          </p>
+        ) : null}
         <div style={{ display: "grid", gap: 8 }}>
-          {wishlist.map((benchID) => (
-            <div key={benchID} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span>{benchID}</span>
-              <button
-                className="button-secondary"
-                onClick={() => {
-                  if (profileId) {
-                    removeWishlistItem(profileId, benchID)
-                      .then(() => setWishlist((prev) => prev.filter((item) => item !== benchID)))
-                      .catch((err: Error) => setStatus(err.message));
-                  }
+          {wishlist.map((benchID) => {
+            const b = wishlistBenches[benchID];
+            return (
+              <div
+                key={benchID}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 12px", borderRadius: "var(--radius)",
+                  background: "var(--elevated)", border: "1px solid var(--border)"
                 }}
               >
-                remove
-              </button>
-            </div>
-          ))}
+                <Link
+                  href={`/bench/${benchID}`}
+                  style={{ flex: 1, minWidth: 0, textDecoration: "none" }}
+                >
+                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {b ? b.name : benchID}
+                  </p>
+                  {b && (
+                    <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
+                      {b.neighborhood} • {b.averageRating.toFixed(1)} ★
+                    </p>
+                  )}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (profileId) {
+                      removeWishlistItem(profileId, benchID)
+                        .then(() => setWishlist((prev) => prev.filter((item) => item !== benchID)))
+                        .catch((err: Error) => setStatus(err.message));
+                    }
+                  }}
+                  style={{
+                    flexShrink: 0, background: "none", border: "none",
+                    cursor: "pointer", color: "var(--text-secondary)", padding: 4
+                  }}
+                  title="Remove from wishlist"
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                    <line x1={18} y1={6} x2={6} y2={18} /><line x1={6} y1={6} x2={18} y2={18} />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 

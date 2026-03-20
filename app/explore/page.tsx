@@ -33,7 +33,7 @@ const TrashIcon = () => (
 
 type ExploreFilters = {
   minRating?: number;
-  type?: string;
+  types?: string[];
 };
 
 const BENCH_TYPE_LABELS: Record<string, string> = {
@@ -48,7 +48,6 @@ export default function ExplorePage() {
   const { isAdmin, profileId } = useAuth();
   const [benches, setBenches] = useState<Bench[]>([]);
   const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
-  const [fogEnabled, setFogEnabled] = useState(true);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,17 +73,19 @@ export default function ExplorePage() {
         lat: 47.6798,
         lng: -122.3288,
         minRating: nextFilters.minRating,
-        type: nextFilters.type,
         radiusMeters: 3000
       });
-      setBenches(data);
+      const filtered = nextFilters.types && nextFilters.types.length > 0
+        ? data.filter((b) => nextFilters.types!.includes(b.type))
+        : data;
+      setBenches(filtered);
       setSelectedBenchID((prev) => {
-        if (prev && data.some((b) => b.id === prev)) return prev;
-        return data.length > 0 ? data[0].id : null;
+        if (prev && filtered.some((b) => b.id === prev)) return prev;
+        return filtered.length > 0 ? filtered[0].id : null;
       });
       trackEvent({
         name: "explore_loaded",
-        metadata: { count: data.length, hasType: Boolean(nextFilters.type), hasMinRating: Boolean(nextFilters.minRating) }
+        metadata: { count: filtered.length, types: nextFilters.types?.length ?? 0, hasMinRating: Boolean(nextFilters.minRating) }
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "unable to load benches");
@@ -97,14 +98,29 @@ export default function ExplorePage() {
     refresh(filters).catch(() => {});
   }, [filters, refresh]);
 
-  const toggleFilter = useCallback((key: keyof ExploreFilters, value: unknown) => {
+  const toggleRating = useCallback((value: number) => {
     setFilters((prev) => {
-      if (prev[key] === value) {
+      if (prev.minRating === value) {
         const next = { ...prev };
-        delete next[key];
+        delete next.minRating;
         return next;
       }
-      return { ...prev, [key]: value };
+      return { ...prev, minRating: value };
+    });
+  }, []);
+
+  const toggleType = useCallback((value: string) => {
+    setFilters((prev) => {
+      const current = prev.types ?? [];
+      const next = current.includes(value)
+        ? current.filter((t) => t !== value)
+        : [...current, value];
+      if (next.length === 0) {
+        const out = { ...prev };
+        delete out.types;
+        return out;
+      }
+      return { ...prev, types: next };
     });
   }, []);
 
@@ -122,6 +138,7 @@ export default function ExplorePage() {
     }
   }, [benches, selectedBenchID]);
 
+  const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
 
   const handleSelectFromMap = useCallback((bench: Bench) => {
@@ -219,7 +236,7 @@ export default function ExplorePage() {
           tempPlacement={tempPlacement}
           onMapClick={handleMapClick}
           benchmarkedBenchIDs={benchmarkedIDs}
-          enableFogOfWar={fogEnabled}
+          enableFogOfWar={false}
         />
       </div>
 
@@ -238,47 +255,22 @@ export default function ExplorePage() {
           <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, justifyContent: "flex-end" }}>
             <button
               type="button"
-              onClick={() => setFogEnabled((v) => !v)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontSize: 12,
-                padding: "6px 10px",
-                height: 32,
-                borderRadius: 999,
-                border: fogEnabled ? "1px solid var(--accent)" : "1px solid var(--border)",
-                background: fogEnabled ? "var(--accent-soft)" : "var(--surface)",
-                color: fogEnabled ? "var(--accent)" : "var(--text-secondary)",
-                fontWeight: fogEnabled ? 600 : 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                transition: "all 0.2s"
-              }}
-            >
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
-              </svg>
-              {fogEnabled ? "challenge on" : "challenge off"}
-            </button>
-            <button
-              type="button"
               onClick={() => setIsFilterOpen((o) => !o)}
               style={{
                 fontSize: 12,
                 padding: "6px 10px",
                 height: 32,
                 borderRadius: 999,
-                border: (filters.minRating || filters.type) ? "1px solid var(--accent)" : "1px solid var(--border)",
-                background: (filters.minRating || filters.type) ? "var(--accent-soft)" : "var(--surface)",
-                color: (filters.minRating || filters.type) ? "var(--accent)" : "var(--text-primary)",
-                fontWeight: (filters.minRating || filters.type) ? 600 : 500,
+                border: hasFilters ? "1px solid var(--accent)" : "1px solid var(--border)",
+                background: hasFilters ? "var(--accent-soft)" : "var(--surface)",
+                color: hasFilters ? "var(--accent)" : "var(--text-primary)",
+                fontWeight: hasFilters ? 600 : 500,
                 cursor: "pointer",
                 fontFamily: "inherit",
                 transition: "all 0.2s"
               }}
             >
-              filters{(filters.minRating || filters.type) ? " ●" : ""}
+              filters{hasFilters ? " ●" : ""}
             </button>
           </div>
         </div>
@@ -293,19 +285,14 @@ export default function ExplorePage() {
                   <button
                     key={r}
                     type="button"
-                    onClick={() => toggleFilter("minRating", r)}
+                    onClick={() => toggleRating(r)}
                     style={{
-                      fontSize: 12,
-                      padding: "5px 10px",
-                      height: 30,
-                      borderRadius: 999,
+                      fontSize: 12, padding: "5px 10px", height: 30, borderRadius: 999,
                       border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                       background: active ? "var(--accent)" : "var(--surface)",
                       color: active ? "#f6f5f1" : "var(--text-primary)",
-                      fontWeight: active ? 600 : 400,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      transition: "all 0.15s"
+                      fontWeight: active ? 600 : 400, cursor: "pointer",
+                      fontFamily: "inherit", transition: "all 0.15s"
                     }}
                   >
                     {r}+ ★
@@ -316,24 +303,19 @@ export default function ExplorePage() {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span className="muted" style={{ fontSize: 11, fontWeight: 600, width: 50 }}>type</span>
               {Object.entries(BENCH_TYPE_LABELS).map(([value, label]) => {
-                const active = filters.type === value;
+                const active = (filters.types ?? []).includes(value);
                 return (
                   <button
                     key={value}
                     type="button"
-                    onClick={() => toggleFilter("type", value)}
+                    onClick={() => toggleType(value)}
                     style={{
-                      fontSize: 12,
-                      padding: "5px 10px",
-                      height: 30,
-                      borderRadius: 999,
+                      fontSize: 12, padding: "5px 10px", height: 30, borderRadius: 999,
                       border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
                       background: active ? "var(--accent)" : "var(--surface)",
                       color: active ? "#f6f5f1" : "var(--text-primary)",
-                      fontWeight: active ? 600 : 400,
-                      cursor: "pointer",
-                      fontFamily: "inherit",
-                      transition: "all 0.15s"
+                      fontWeight: active ? 600 : 400, cursor: "pointer",
+                      fontFamily: "inherit", transition: "all 0.15s"
                     }}
                   >
                     {label}
@@ -341,21 +323,15 @@ export default function ExplorePage() {
                 );
               })}
             </div>
-            {(filters.minRating || filters.type) && (
+            {hasFilters && (
               <button
                 type="button"
                 onClick={() => setFilters({})}
                 style={{
-                  alignSelf: "flex-start",
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  height: 26,
-                  borderRadius: 999,
-                  border: "1px solid var(--danger)",
-                  background: "transparent",
-                  color: "var(--danger)",
-                  cursor: "pointer",
-                  fontFamily: "inherit"
+                  alignSelf: "flex-start", fontSize: 11, padding: "4px 10px",
+                  height: 26, borderRadius: 999, border: "1px solid var(--danger)",
+                  background: "transparent", color: "var(--danger)",
+                  cursor: "pointer", fontFamily: "inherit"
                 }}
               >
                 clear all filters

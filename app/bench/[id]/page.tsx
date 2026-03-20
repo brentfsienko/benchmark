@@ -1,9 +1,9 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { addWishlistItem, getBench, listBenchReviews, submitBenchmark } from "@/src/lib/api";
+import { addWishlistItem, getBench, listBenchReviews, listWishlist, removeWishlistItem, submitBenchmark } from "@/src/lib/api";
 import type { Bench, BenchReview } from "@/src/lib/types";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
@@ -12,6 +12,45 @@ import { FollowButton } from "@/src/components/follow-button";
 
 const MAX_PHOTOS = 4;
 const MAX_PHOTO_BYTES = 1_500_000;
+
+const RATING_LABELS: Record<string, string> = {
+  "1": "hard pass",
+  "1.5": "not great",
+  "2": "meh",
+  "2.5": "it's okay",
+  "3": "decent sit",
+  "3.5": "pretty nice",
+  "4": "great bench",
+  "4.5": "amazing",
+  "5": "life-changing"
+};
+
+const RATING_EMOJI: Record<string, string> = {
+  "1": "😬", "1.5": "😕", "2": "😐", "2.5": "🙂",
+  "3": "😊", "3.5": "😄", "4": "🤩", "4.5": "🥳", "5": "🪑✨"
+};
+
+function HeartIcon({ filled }: { filled: boolean }) {
+  return filled ? (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" strokeWidth="2">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  const [exiting, setExiting] = useState(false);
+  useEffect(() => {
+    const t1 = setTimeout(() => setExiting(true), 2200);
+    const t2 = setTimeout(onDone, 2500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [onDone]);
+  return <div className={`toast${exiting ? " toast-exit" : ""}`}>{message}</div>;
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -28,12 +67,16 @@ export default function BenchDetailPage() {
   const benchID = params.id;
   const [bench, setBench] = useState<Bench | null>(null);
   const [reviews, setReviews] = useState<BenchReview[]>([]);
-  const [rating, setRating] = useState("5");
+  const [rating, setRating] = useState(4);
   const [body, setBody] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [wishlisted, setWishlisted] = useState(false);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastKey = useRef(0);
 
   useEffect(() => {
     if (!benchID) return;
@@ -44,6 +87,41 @@ export default function BenchDetailPage() {
       })
       .catch((err: Error) => setStatus(err.message));
   }, [benchID]);
+
+  useEffect(() => {
+    if (!profileId) return;
+    listWishlist(profileId)
+      .then((ids) => setWishlisted(ids.includes(benchID)))
+      .catch(() => {});
+  }, [profileId, benchID]);
+
+  const toggleWishlist = useCallback(async () => {
+    if (!profileId) {
+      toastKey.current++;
+      setToast("sign in to save to wishlist");
+      return;
+    }
+    setWishlistLoading(true);
+    try {
+      if (wishlisted) {
+        await removeWishlistItem(profileId, benchID);
+        setWishlisted(false);
+        toastKey.current++;
+        setToast("removed from wishlist");
+      } else {
+        await addWishlistItem(profileId, benchID);
+        setWishlisted(true);
+        toastKey.current++;
+        setToast("saved to wishlist ♥");
+        trackEvent({ name: "wishlist_added", benchId: benchID, userId: profileId });
+      }
+    } catch (err) {
+      toastKey.current++;
+      setToast(err instanceof Error ? err.message : "something went wrong");
+    } finally {
+      setWishlistLoading(false);
+    }
+  }, [profileId, benchID, wishlisted]);
 
   const onPhotosSelected = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -74,7 +152,7 @@ export default function BenchDetailPage() {
     setSubmitting(true);
     try {
       await submitBenchmark(benchID, {
-        rating: Number(rating),
+        rating,
         body,
         photoBase64Items: photos,
         userId: profileId ?? undefined
@@ -83,7 +161,9 @@ export default function BenchDetailPage() {
       setReviews(next);
       setBody("");
       setPhotos([]);
-      setStatus("benchmark submitted");
+      setRating(4);
+      toastKey.current++;
+      setToast("benchmark submitted! nice sit.");
       trackEvent({ name: "benchmark_submitted", userId: profileId ?? "anonymous", benchId: benchID });
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "unable to submit benchmark");
@@ -91,6 +171,11 @@ export default function BenchDetailPage() {
       setSubmitting(false);
     }
   };
+
+  const ratingKey = String(rating);
+  const ratingLabel = RATING_LABELS[ratingKey] ?? "";
+  const ratingEmoji = RATING_EMOJI[ratingKey] ?? "🪑";
+  const fillPct = ((rating - 1) / 4) * 100;
 
   const allPhotos = reviews.flatMap((r) =>
     (r.photoBase64Items ?? []).map((src) => ({ src, author: r.author, rating: r.rating }))
@@ -103,13 +188,28 @@ export default function BenchDetailPage() {
       </div>
       {bench ? (
         <>
-          <h1 style={{ marginTop: 0 }}>{bench.name}</h1>
-          <p className="muted">
-            {bench.neighborhood} • {bench.type} • {bench.averageRating.toFixed(1)} ★
-          </p>
-          <p>{bench.description}</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+            <div>
+              <h1 style={{ marginTop: 0, marginBottom: 4 }}>{bench.name}</h1>
+              <p className="muted" style={{ margin: 0 }}>
+                {bench.neighborhood} • {bench.type} • {bench.averageRating.toFixed(1)} ★
+              </p>
+            </div>
+            <button
+              type="button"
+              className={`wishlist-btn${wishlisted ? " saved" : ""}`}
+              onClick={toggleWishlist}
+              disabled={wishlistLoading}
+              style={{ flexShrink: 0, marginTop: 4 }}
+            >
+              <span className="heart-icon" key={wishlisted ? "filled" : "outline"}>
+                <HeartIcon filled={wishlisted} />
+              </span>
+              {wishlisted ? "saved" : "save"}
+            </button>
+          </div>
+          <p style={{ marginTop: 8 }}>{bench.description}</p>
 
-          {/* Photo gallery from all benchmarks */}
           {allPhotos.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: 16, marginBottom: 10 }}>community photos</h2>
@@ -126,14 +226,8 @@ export default function BenchDetailPage() {
                     type="button"
                     onClick={() => setSelectedPhoto(photo.src)}
                     style={{
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      background: "none",
-                      borderRadius: "var(--radius)",
-                      overflow: "hidden",
-                      aspectRatio: "1",
-                      position: "relative"
+                      border: "none", padding: 0, cursor: "pointer", background: "none",
+                      borderRadius: "var(--radius)", overflow: "hidden", aspectRatio: "1"
                     }}
                   >
                     <img
@@ -147,20 +241,14 @@ export default function BenchDetailPage() {
             </div>
           )}
 
-          {/* Fullscreen photo viewer */}
           {selectedPhoto && (
             <div
               onClick={() => setSelectedPhoto(null)}
               style={{
-                position: "fixed",
-                inset: 0,
-                zIndex: 100,
-                background: "rgba(0,0,0,0.85)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: 20,
-                cursor: "pointer"
+                position: "fixed", inset: 0, zIndex: 100,
+                background: "rgba(0,0,0,0.85)", display: "flex",
+                alignItems: "center", justifyContent: "center",
+                padding: 20, cursor: "pointer"
               }}
             >
               <img
@@ -171,41 +259,49 @@ export default function BenchDetailPage() {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
-            <button
-              className="button-secondary"
-              onClick={() => {
-                if (profileId) {
-                  addWishlistItem(profileId, benchID)
-                    .then(() => setStatus("saved to wishlist"))
-                    .catch((err: Error) => setStatus(err.message));
-                } else {
-                  setStatus("sign in to save to wishlist");
-                }
-              }}
-            >
-              save to wishlist
-            </button>
-          </div>
-
           {/* Benchmark submission form */}
-          <form onSubmit={onSubmit} className="surface-card" style={{ padding: 16, marginBottom: 14 }}>
+          <form onSubmit={onSubmit} className="surface-card" style={{ padding: 18, marginBottom: 14 }}>
             <h2 style={{ marginTop: 0, fontSize: 16 }}>submit benchmark</h2>
             <p className="muted" style={{ marginTop: 0, fontSize: 12 }}>
               rate this bench, leave a note, and attach photos of the view.
             </p>
-            <label style={{ display: "block", marginBottom: 12 }}>
-              rating
-              <input
-                value={rating}
-                onChange={(e) => setRating(e.target.value)}
-                type="number"
-                min={0}
-                max={5}
-                step={0.5}
-                style={{ display: "block", width: "100%", marginTop: 4 }}
-              />
-            </label>
+
+            {/* Rating slider */}
+            <div className="rating-slider-container" style={{ marginBottom: 16 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>rating</span>
+                <div style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: 28, lineHeight: 1 }}>{ratingEmoji}</span>
+                </div>
+              </div>
+              <div style={{ textAlign: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 24, fontWeight: 700 }}>{rating.toFixed(1)}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: "var(--accent)", marginLeft: 8 }}>
+                  {ratingLabel}
+                </span>
+              </div>
+              <div className="rating-slider-track">
+                <input
+                  type="range"
+                  min={1}
+                  max={5}
+                  step={0.5}
+                  value={rating}
+                  onChange={(e) => setRating(parseFloat(e.target.value))}
+                  style={{
+                    background: `linear-gradient(to right, var(--accent) 0%, var(--accent) ${fillPct}%, var(--border) ${fillPct}%, var(--border) 100%)`
+                  }}
+                />
+              </div>
+              <div className="rating-slider-labels">
+                <span>1.0</span>
+                <span>2.0</span>
+                <span>3.0</span>
+                <span>4.0</span>
+                <span>5.0</span>
+              </div>
+            </div>
+
             <label style={{ display: "block", marginBottom: 12 }}>
               note
               <textarea
@@ -217,7 +313,6 @@ export default function BenchDetailPage() {
               />
             </label>
 
-            {/* Photo upload */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ fontSize: 14 }}>photos</span>
@@ -236,20 +331,11 @@ export default function BenchDetailPage() {
                         type="button"
                         onClick={() => removePhoto(i)}
                         style={{
-                          position: "absolute",
-                          top: -6,
-                          right: -6,
-                          width: 20,
-                          height: 20,
-                          borderRadius: "50%",
-                          background: "var(--danger)",
-                          color: "white",
-                          border: "none",
-                          cursor: "pointer",
-                          fontSize: 12,
-                          lineHeight: "20px",
-                          textAlign: "center",
-                          padding: 0
+                          position: "absolute", top: -6, right: -6,
+                          width: 20, height: 20, borderRadius: "50%",
+                          background: "var(--danger)", color: "white",
+                          border: "none", cursor: "pointer",
+                          fontSize: 12, lineHeight: "20px", textAlign: "center", padding: 0
                         }}
                       >
                         ×
@@ -261,15 +347,10 @@ export default function BenchDetailPage() {
               {photos.length < MAX_PHOTOS && (
                 <label
                   style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "8px 12px",
-                    borderRadius: "var(--radius)",
-                    border: "1px dashed var(--border)",
-                    cursor: "pointer",
-                    fontSize: 13,
-                    color: "var(--text-secondary)"
+                    display: "inline-flex", alignItems: "center", gap: 6,
+                    padding: "8px 12px", borderRadius: "var(--radius)",
+                    border: "1px dashed var(--border)", cursor: "pointer",
+                    fontSize: 13, color: "var(--text-secondary)"
                   }}
                 >
                   <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -278,13 +359,7 @@ export default function BenchDetailPage() {
                     <path d="m21 15-5-5L5 21" />
                   </svg>
                   add photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={onPhotosSelected}
-                    style={{ display: "none" }}
-                  />
+                  <input type="file" accept="image/*" multiple onChange={onPhotosSelected} style={{ display: "none" }} />
                 </label>
               )}
             </div>
@@ -318,7 +393,6 @@ export default function BenchDetailPage() {
                     {review.body && (
                       <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.4 }}>{review.body}</p>
                     )}
-                    {/* Inline photos */}
                     {(review.photoBase64Items ?? []).length > 0 && (
                       <div style={{ display: "flex", gap: 6, marginTop: 10, overflowX: "auto" }}>
                         {(review.photoBase64Items ?? []).map((src, i) => (
@@ -349,7 +423,8 @@ export default function BenchDetailPage() {
       ) : (
         <p className="muted">loading bench…</p>
       )}
-      {status ? <p style={{ color: "var(--accent)" }}>{status}</p> : null}
+      {status && <p style={{ color: "var(--accent)" }}>{status}</p>}
+      {toast && <Toast key={toastKey.current} message={toast} onDone={() => setToast(null)} />}
     </section>
   );
 }
