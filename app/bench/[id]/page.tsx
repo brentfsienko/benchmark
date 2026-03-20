@@ -2,11 +2,13 @@
 
 import { useParams } from "next/navigation";
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { addWishlistItem, getBench, listBenchReviews, submitBenchmark } from "@/src/lib/api";
 import type { Bench, BenchReview } from "@/src/lib/types";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
+import { FollowButton } from "@/src/components/follow-button";
 
 export default function BenchDetailPage() {
   const params = useParams<{ id: string }>();
@@ -100,11 +102,22 @@ export default function BenchDetailPage() {
             <div style={{ display: "grid", gap: 8 }}>
               {reviews.map((review) => (
                 <article key={review.id} className="surface-card" style={{ padding: 12 }}>
-                  <p style={{ margin: 0 }}>{review.author}</p>
-                  <p className="muted" style={{ margin: "6px 0 0 0" }}>
-                    rating {review.rating.toFixed(1)}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                    <Link
+                      href={`/user/${review.userId}`}
+                      style={{ fontWeight: 600, color: "var(--accent)", fontSize: 14 }}
+                    >
+                      {review.author}
+                    </Link>
+                    <FollowButton targetUserId={review.userId} size="sm" />
+                  </div>
+                  <p className="muted" style={{ margin: "6px 0 0 0", fontSize: 13 }}>
+                    {review.rating.toFixed(1)} ★
                   </p>
-                  {review.body ? <p style={{ marginBottom: 0 }}>{review.body}</p> : null}
+                  {review.body ? <p style={{ marginBottom: 0, fontSize: 14 }}>{review.body}</p> : null}
+                  <p className="muted" style={{ margin: "6px 0 0", fontSize: 11 }}>
+                    {new Date(review.createdAt).toLocaleDateString()}
+                  </p>
                 </article>
               ))}
             </div>

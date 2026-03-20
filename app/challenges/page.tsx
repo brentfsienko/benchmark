@@ -7,6 +7,7 @@ import { useAuth } from "@/src/contexts/auth-context";
 import { getParkLeaderboard, joinChallenge, listChallenges, listNearbyBenches, recordChallengeProgress } from "@/src/lib/api";
 import type { Challenge, LeaderboardEntry } from "@/src/lib/types";
 import { trackEvent } from "@/src/lib/analytics";
+import { FollowButton } from "@/src/components/follow-button";
 
 const PARKS = [
   { id: "green-lake", name: "Green Lake", description: "2.8 mile loop • 8 benches" },
@@ -193,25 +194,27 @@ function ChallengesContent() {
               <p className="muted">no entries yet. join the challenge and submit your first benchmark!</p>
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
-                {leaderboard.map((entry) => (
+                  {leaderboard.map((entry) => (
                   <div
                     key={`${entry.userId}-${entry.rank}`}
                     style={{
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
+                      gap: 8,
                       padding: "10px 12px",
                       background: entry.rank <= 3 ? "var(--accent-soft)" : "transparent",
                       borderRadius: "var(--radius)",
                       border: entry.rank <= 3 ? "1px solid var(--accent)" : "1px solid transparent"
                     }}
                   >
-                    <span style={{ fontWeight: 600 }}>
+                    <Link href={`/user/${entry.userId}`} style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
                       #{entry.rank} {entry.userId}
+                    </Link>
+                    <span className="muted" style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                      {entry.points} pts
                     </span>
-                    <span className="muted">
-                      {entry.points} pts • {entry.progress} benches
-                    </span>
+                    <FollowButton targetUserId={entry.userId} size="sm" />
                   </div>
                 ))}
               </div>
