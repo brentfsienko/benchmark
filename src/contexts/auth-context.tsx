@@ -8,13 +8,17 @@ type AuthContextValue = {
   user: User | null;
   profileId: string | null;
   loading: boolean;
+  isAdmin: boolean;
   signOut: () => Promise<void>;
 };
+
+const ADMIN_EMAIL = "brentfsienko@gmail.com";
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   profileId: null,
   loading: true,
+  isAdmin: false,
   signOut: async () => {}
 });
 
@@ -60,8 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.location.href = "/";
   }, []);
 
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
   return (
-    <AuthContext.Provider value={{ user, profileId, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profileId, loading, isAdmin, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -7,6 +7,7 @@ import type { Bench } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { ExploreMap } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
+import { useAuth } from "@/src/contexts/auth-context";
 
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -36,6 +37,7 @@ type ExploreFilters = {
 };
 
 export default function ExplorePage() {
+  const { isAdmin } = useAuth();
   const [benches, setBenches] = useState<Bench[]>([]);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
@@ -275,22 +277,24 @@ export default function ExplorePage() {
         }}
       >
         {!addMode ? (
-          <button
-            type="button"
-            className="button-primary"
-            onClick={handlePlusClick}
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-            }}
-            aria-label="Add bench"
-          >
-            <PlusIcon />
-          </button>
+          isAdmin && (
+            <button
+              type="button"
+              className="button-primary"
+              onClick={handlePlusClick}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+              }}
+              aria-label="Add bench"
+            >
+              <PlusIcon />
+            </button>
+          )
         ) : (
           <>
             <button
