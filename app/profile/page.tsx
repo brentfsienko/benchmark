@@ -8,12 +8,24 @@ import type { UserProfile } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
 
+function PencilIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+      <path d="m15 5 4 4" />
+    </svg>
+  );
+}
+
 export default function ProfilePage() {
   const { profileId, user, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string } | null>(null);
+  const [editing, setEditing] = useState(false);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
+  const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,26 +40,46 @@ export default function ProfilePage() {
       .catch((err: Error) => setStatus(err.message));
   }, [profileId]);
 
+  const enterEditMode = () => {
+    if (!profile) return;
+    setDraft({ displayName: profile.displayName, username: profile.username, bio: profile.bio });
+    setStatus(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft(null);
+    setStatus(null);
+  };
+
   const onSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!profile || !profileId) return;
+    if (!draft || !profile || !profileId) return;
+    setSaving(true);
     try {
       const updated = await updateProfile(profileId, {
-        displayName: profile.displayName,
-        username: profile.username,
-        bio: profile.bio
+        displayName: draft.displayName,
+        username: draft.username,
+        bio: draft.bio
       });
       setProfile(updated);
-      setStatus("profile updated");
+      setEditing(false);
+      setDraft(null);
+      setStatus("profile saved");
       trackEvent({ name: "profile_updated", userId: profileId });
+      setTimeout(() => setStatus(null), 3000);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "unable to update profile");
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <section className="screen">
       <SectionHeader title="profile" subtitle="your benchmark identity" />
+
       {!user ? (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to save your profile and wishlist</p>
@@ -55,56 +87,99 @@ export default function ProfilePage() {
             sign in
           </Link>
         </div>
-      ) : (
-        <div style={{ marginBottom: 12 }}>
-          <button type="button" className="button-secondary" onClick={() => signOut()}>
-            sign out
-          </button>
-        </div>
-      )}
+      ) : null}
+
       {profile ? (
-        <form onSubmit={onSave} className="surface-card" style={{ padding: 14, marginBottom: 12 }}>
-          <label>
-            display name
-            <input
-              value={profile.displayName}
-              onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
-              style={{ width: "100%", marginTop: 4 }}
-            />
-          </label>
-          <label style={{ display: "block", marginTop: 8 }}>
-            username
-            <input
-              value={profile.username}
-              onChange={(e) => setProfile({ ...profile, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
-              placeholder="@username"
-              style={{ width: "100%", marginTop: 4 }}
-            />
-            <span className="muted" style={{ fontSize: 12, display: "block", marginTop: 4 }}>lowercase, no spaces</span>
-          </label>
-          <label style={{ display: "block", marginTop: 8 }}>
-            bio
-            <textarea
-              value={profile.bio}
-              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-              rows={3}
-              style={{ width: "100%", marginTop: 4 }}
-            />
-          </label>
-          <button className="button-primary" style={{ marginTop: 10 }} type="submit">
-            save profile
-          </button>
-        </form>
+        editing && draft ? (
+          <form onSubmit={onSave} className="surface-card" style={{ padding: 16, marginBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>editing profile</span>
+              <button type="button" onClick={cancelEdit} className="button-secondary" style={{ padding: "4px 12px", fontSize: 12 }}>
+                cancel
+              </button>
+            </div>
+            <label>
+              display name
+              <input
+                value={draft.displayName}
+                onChange={(e) => setDraft({ ...draft, displayName: e.target.value })}
+                style={{ width: "100%", marginTop: 4 }}
+              />
+            </label>
+            <label style={{ display: "block", marginTop: 10 }}>
+              username
+              <input
+                value={draft.username}
+                onChange={(e) => setDraft({ ...draft, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "") })}
+                placeholder="@username"
+                style={{ width: "100%", marginTop: 4 }}
+              />
+              <span className="muted" style={{ fontSize: 12, display: "block", marginTop: 4 }}>lowercase, no spaces</span>
+            </label>
+            <label style={{ display: "block", marginTop: 10 }}>
+              bio
+              <textarea
+                value={draft.bio}
+                onChange={(e) => setDraft({ ...draft, bio: e.target.value })}
+                rows={3}
+                style={{ width: "100%", marginTop: 4 }}
+              />
+            </label>
+            <button className="button-primary" style={{ marginTop: 12, width: "100%" }} type="submit" disabled={saving}>
+              {saving ? "saving…" : "save changes"}
+            </button>
+          </form>
+        ) : (
+          <div className="surface-card" style={{ padding: 16, marginBottom: 12, position: "relative" }}>
+            <button
+              type="button"
+              onClick={enterEditMode}
+              title="Edit profile"
+              style={{
+                position: "absolute", top: 14, right: 14,
+                background: "var(--surface-secondary)", border: "1px solid var(--border)",
+                borderRadius: 8, padding: "6px 8px", cursor: "pointer",
+                color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: 4,
+                fontSize: 12, fontWeight: 500, transition: "all 0.15s ease"
+              }}
+            >
+              <PencilIcon /> edit
+            </button>
+
+            <div style={{ marginBottom: 6 }}>
+              <h2 style={{ margin: 0, fontSize: 20 }}>{profile.displayName}</h2>
+              <span className="muted" style={{ fontSize: 13 }}>@{profile.username}</span>
+            </div>
+
+            {profile.bio ? (
+              <p style={{ margin: "8px 0 0", fontSize: 14, lineHeight: 1.5, color: "var(--text-secondary)" }}>
+                {profile.bio}
+              </p>
+            ) : (
+              <p className="muted" style={{ margin: "8px 0 0", fontSize: 13, fontStyle: "italic" }}>
+                no bio yet — tap edit to add one
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkedBenchIDs.length}</strong> benchmarked
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers
+              </span>
+              <span className="muted" style={{ fontSize: 13 }}>
+                <strong style={{ color: "var(--text-primary)" }}>{following.length}</strong> following
+              </span>
+            </div>
+          </div>
+        )
       ) : profileId ? (
         <p className="muted">loading profile…</p>
       ) : null}
 
-      {profile && profileId && (
-        <div style={{ display: "flex", gap: 20, marginBottom: 12, flexWrap: "wrap" }}>
-          <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkedBenchIDs.length}</strong> benchmarked</span>
-          <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers</span>
-          <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{following.length}</strong> following</span>
-        </div>
+      {status && (
+        <p style={{ color: "var(--accent)", fontSize: 13, margin: "0 0 12px", fontWeight: 500 }}>{status}</p>
       )}
 
       <section className="surface-card" style={{ padding: 14 }}>
@@ -130,7 +205,14 @@ export default function ProfilePage() {
           ))}
         </div>
       </section>
-      {status ? <p style={{ color: "var(--accent)" }}>{status}</p> : null}
+
+      {user && (
+        <div style={{ marginTop: 16 }}>
+          <button type="button" className="button-secondary" style={{ width: "100%", opacity: 0.7 }} onClick={() => signOut()}>
+            sign out
+          </button>
+        </div>
+      )}
     </section>
   );
 }
