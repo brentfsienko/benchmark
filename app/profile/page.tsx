@@ -3,7 +3,17 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
-import { getBench, getProfile, listFollowers, listFollowing, listWishlist, removeWishlistItem, updateProfile } from "@/src/lib/api";
+import {
+  decideFollowRequest,
+  getBench,
+  getProfile,
+  listFollowRequests,
+  listFollowers,
+  listFollowing,
+  listWishlist,
+  removeWishlistItem,
+  updateProfile
+} from "@/src/lib/api";
 import type { Bench, UserProfile } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
@@ -26,6 +36,7 @@ export default function ProfilePage() {
   const [wishlistBenches, setWishlistBenches] = useState<Record<string, Bench>>({});
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -38,12 +49,19 @@ export default function ProfilePage() {
       setFollowing([]);
       return;
     }
-    Promise.all([getProfile(profileId), listWishlist(profileId), listFollowers(profileId), listFollowing(profileId)])
-      .then(([user, items, fers, fing]) => {
+    Promise.all([
+      getProfile(profileId),
+      listWishlist(profileId),
+      listFollowers(profileId),
+      listFollowing(profileId),
+      listFollowRequests(profileId)
+    ])
+      .then(([user, items, fers, fing, req]) => {
         setProfile(user);
         setWishlist(items);
         setFollowers(fers);
         setFollowing(fing);
+        setIncomingRequests(req.incoming);
       })
       .catch((err: Error) => setStatus(err.message));
   }, [profileId, user]);
@@ -183,7 +201,7 @@ export default function ProfilePage() {
 
             <div style={{ display: "flex", gap: 20, marginTop: 14, flexWrap: "wrap" }}>
               <span className="muted" style={{ fontSize: 13 }}>
-                <strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkedBenchIDs.length}</strong> benchmarked
+                <strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkCount ?? profile.benchmarkedBenchIDs.length}</strong> benchmark
               </span>
               <span className="muted" style={{ fontSize: 13 }}>
                 <strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers
@@ -200,6 +218,66 @@ export default function ProfilePage() {
 
       {user && status && (
         <p style={{ color: "var(--accent)", fontSize: 13, margin: "0 0 12px", fontWeight: 500 }}>{status}</p>
+      )}
+
+      {user && incomingRequests.length > 0 && (
+        <section className="surface-card" style={{ padding: 14, marginBottom: 12 }}>
+          <h2 style={{ marginTop: 0, fontSize: 16 }}>
+            follow requests
+            <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>
+              ({incomingRequests.length})
+            </span>
+          </h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {incomingRequests.map((requesterId) => (
+              <div
+                key={requesterId}
+                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}
+              >
+                <Link href={`/user/${requesterId}`} style={{ fontSize: 13, fontWeight: 600 }}>
+                  {requesterId}
+                </Link>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    type="button"
+                    className="button-secondary"
+                    style={{ fontSize: 12, padding: "4px 10px" }}
+                    onClick={async () => {
+                      if (!profileId) return;
+                      try {
+                        await decideFollowRequest(profileId, requesterId, "reject");
+                        setIncomingRequests((prev) => prev.filter((id) => id !== requesterId));
+                        setStatus("request declined");
+                      } catch (err) {
+                        setStatus(err instanceof Error ? err.message : "unable to decline request");
+                      }
+                    }}
+                  >
+                    decline
+                  </button>
+                  <button
+                    type="button"
+                    className="button-primary"
+                    style={{ fontSize: 12, padding: "4px 10px" }}
+                    onClick={async () => {
+                      if (!profileId) return;
+                      try {
+                        await decideFollowRequest(profileId, requesterId, "approve");
+                        setIncomingRequests((prev) => prev.filter((id) => id !== requesterId));
+                        setFollowers((prev) => (prev.includes(requesterId) ? prev : [...prev, requesterId]));
+                        setStatus("request approved");
+                      } catch (err) {
+                        setStatus(err instanceof Error ? err.message : "unable to approve request");
+                      }
+                    }}
+                  >
+                    approve
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
 
       {user && (

@@ -28,7 +28,7 @@ export default function HomePage() {
 
   useEffect(() => {
     const id = profileId ?? "user-1";
-    listActivity(id)
+    listActivity(id, { feed: Boolean(profileId) })
       .then((next) => {
         setItems(next);
         trackEvent({ name: "home_feed_loaded", userId: id, metadata: { count: next.length } });
@@ -65,6 +65,11 @@ export default function HomePage() {
               <p className="muted" style={{ margin: "6px 0 0", fontSize: 12 }}>
                 benchmarked {new Date(item.createdAt).toLocaleDateString()}
               </p>
+              {item.author && (
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: 11 }}>
+                  by {item.userId === profileId ? "you" : item.author}
+                </p>
+              )}
             </article>
           </Link>
         ))}

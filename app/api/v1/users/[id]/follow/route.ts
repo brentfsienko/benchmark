@@ -15,13 +15,27 @@ export async function POST(
   if (followerId === targetId) return jsonError("Cannot follow yourself", "validation_error", 422);
 
   const supabase = createSupabaseAdmin();
-  const { error } = await supabase.from("user_follows").insert({
-    follower_id: followerId,
-    following_id: targetId
-  });
-  if (error) {
-    if (error.code === "23505") return jsonData({ followed: true });
-    return jsonError("Unable to follow", "internal_error", 500);
+  const { data: alreadyFollowing } = await supabase
+    .from("user_follows")
+    .select("follower_id")
+    .eq("follower_id", followerId)
+    .eq("following_id", targetId)
+    .maybeSingle();
+  if (alreadyFollowing) {
+    return jsonData({ state: "following" as const });
   }
-  return jsonData({ followed: true });
+
+  const { error } = await supabase.from("follow_requests").upsert(
+    {
+      requester_id: followerId,
+      target_id: targetId,
+      status: "pending",
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "requester_id,target_id" }
+  );
+  if (error) {
+    return jsonError("Unable to send follow request", "internal_error", 500);
+  }
+  return jsonData({ state: "requested" as const });
 }

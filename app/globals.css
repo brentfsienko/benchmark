@@ -188,6 +188,28 @@ main {
   min-width: 0;
 }
 
+.nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.nav-badge {
+  position: absolute;
+  top: -7px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  line-height: 16px;
+  text-align: center;
+  font-weight: 700;
+  border: 1px solid var(--surface);
+}
+
 .bottom-nav .active {
   color: var(--accent);
   background: var(--accent-soft);
@@ -493,4 +515,41 @@ main {
 }
 .badge.earned .badge-label {
   color: var(--accent);
+}
+
+.photo-row-shell {
+  position: relative;
+}
+
+.photo-row-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.photo-row-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.photo-row-fade {
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 42px;
+  height: calc(100% - 4px);
+  background: linear-gradient(to right, rgba(245, 239, 228, 0), var(--page));
+}
+
+.benchmark-carousel {
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.benchmark-carousel::-webkit-scrollbar {
+  display: none;
 }

@@ -1,5 +1,15 @@
 import { env, getApiBaseUrl } from "./env";
-import type { ActivityItem, Bench, BenchReview, Challenge, LeaderboardEntry, UserProfile } from "./types";
+import type {
+  ActivityItem,
+  Bench,
+  BenchReview,
+  Challenge,
+  FriendChallengeProgress,
+  FollowRelationshipState,
+  FollowRequests,
+  LeaderboardEntry,
+  UserProfile
+} from "./types";
 
 type APIResponse<T> = {
   data: T;
@@ -124,8 +134,9 @@ export function updateProfile(
   });
 }
 
-export function listActivity(userID: string): Promise<ActivityItem[]> {
-  return request<ActivityItem[]>(`/users/${userID}/activity`);
+export function listActivity(userID: string, options?: { feed?: boolean }): Promise<ActivityItem[]> {
+  const suffix = options?.feed ? "?feed=true" : "";
+  return request<ActivityItem[]>(`/users/${userID}/activity${suffix}`);
 }
 
 export function listWishlist(userID: string): Promise<string[]> {
@@ -153,17 +164,32 @@ export function listFollowing(userID: string): Promise<string[]> {
   return request<string[]>(`/users/${userID}/following`);
 }
 
-export function followUser(followerId: string, targetId: string): Promise<{ followed: boolean }> {
-  return request<{ followed: boolean }>(`/users/${targetId}/follow`, {
+export function followUser(_followerId: string, targetId: string): Promise<{ state: FollowRelationshipState }> {
+  return request<{ state: FollowRelationshipState }>(`/users/${targetId}/follow`, {
     method: "POST",
-    body: JSON.stringify({ followerId })
+    body: JSON.stringify({})
   });
 }
 
-export function unfollowUser(followerId: string, targetId: string): Promise<{ unfollowed: boolean }> {
-  return request<{ unfollowed: boolean }>(`/users/${targetId}/unfollow`, {
+export function unfollowUser(_followerId: string, targetId: string): Promise<{ state: FollowRelationshipState }> {
+  return request<{ state: FollowRelationshipState }>(`/users/${targetId}/unfollow`, {
     method: "POST",
-    body: JSON.stringify({ followerId })
+    body: JSON.stringify({})
+  });
+}
+
+export function listFollowRequests(userID: string): Promise<FollowRequests> {
+  return request<FollowRequests>(`/users/${userID}/follow-requests`);
+}
+
+export function decideFollowRequest(
+  userID: string,
+  otherUserId: string,
+  action: "approve" | "reject" | "cancel"
+): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/users/${userID}/follow-requests`, {
+    method: "POST",
+    body: JSON.stringify({ otherUserId, action })
   });
 }
 
@@ -202,6 +228,10 @@ export function recordChallengeProgress(challengeID: string, userID: string, ben
 
 export function getParkLeaderboard(parkID: string): Promise<LeaderboardEntry[]> {
   return request<LeaderboardEntry[]>(`/leaderboards/${parkID}`);
+}
+
+export function getChallengeFriendsProgress(challengeID: string): Promise<FriendChallengeProgress[]> {
+  return request<FriendChallengeProgress[]>(`/challenges/${challengeID}/friends-progress`);
 }
 
 export function createContentReport(payload: {

@@ -35,6 +35,7 @@ export type UserProfile = {
   avatarPhotoURL?: string;
   avatarPhotoBase64?: string;
   benchmarkedBenchIDs: string[];
+  benchmarkCount?: number;
   wishlistBenchIDs: string[];
 };
 
@@ -42,6 +43,7 @@ export type ActivityItem = {
   id: string;
   type: "benchmark";
   userId: string;
+  author?: string;
   benchId: string;
   benchName: string;
   rating?: number;
@@ -61,7 +63,26 @@ export type Challenge = {
 
 export type LeaderboardEntry = {
   userId: string;
+  displayName?: string;
+  username?: string;
   points: number;
   progress: number;
   rank: number;
+};
+
+export type FollowRelationshipState = "none" | "requested" | "following";
+
+export type FollowRequests = {
+  incoming: string[];
+  outgoing: string[];
+};
+
+export type FriendChallengeProgress = {
+  userId: string;
+  displayName: string;
+  username: string;
+  progress: number;
+  points: number;
+  started: boolean;
+  completed: boolean;
 };

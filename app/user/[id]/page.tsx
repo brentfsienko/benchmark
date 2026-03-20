@@ -98,8 +98,8 @@ export default function PublicProfilePage() {
       {/* Stats */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <div className="surface-card" style={{ padding: "12px 16px", textAlign: "center", flex: 1, minWidth: 80 }}>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.benchmarkedBenchIDs.length}</p>
-          <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>benchmarked</p>
+          <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.benchmarkCount ?? profile.benchmarkedBenchIDs.length}</p>
+          <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>benchmark</p>
         </div>
         <div className="surface-card" style={{ padding: "12px 16px", textAlign: "center", flex: 1, minWidth: 80 }}>
           <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.wishlistBenchIDs.length}</p>

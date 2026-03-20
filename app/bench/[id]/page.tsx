@@ -61,6 +61,15 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function getMiniMapEmbedUrl(lat: number, lng: number): string {
+  const delta = 0.0028;
+  const left = lng - delta;
+  const right = lng + delta;
+  const top = lat + delta;
+  const bottom = lat - delta;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${left}%2C${bottom}%2C${right}%2C${top}&layer=mapnik&marker=${lat}%2C${lng}`;
+}
+
 export default function BenchDetailPage() {
   const params = useParams<{ id: string }>();
   const { profileId } = useAuth();
@@ -73,6 +82,7 @@ export default function BenchDetailPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [showAllPhotosModal, setShowAllPhotosModal] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -210,33 +220,118 @@ export default function BenchDetailPage() {
           </div>
           <p style={{ marginTop: 8 }}>{bench.description}</p>
 
+          <section className="surface-card" style={{ padding: 12, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <h2 style={{ margin: 0, fontSize: 14 }}>bench location</h2>
+              <Link
+                href={`https://www.google.com/maps/search/?api=1&query=${bench.latitude},${bench.longitude}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}
+              >
+                open maps →
+              </Link>
+            </div>
+            <div style={{ borderRadius: "calc(var(--radius) - 2px)", overflow: "hidden", border: "1px solid var(--border)", height: 160 }}>
+              <iframe
+                title={`Map for ${bench.name}`}
+                src={getMiniMapEmbedUrl(bench.latitude, bench.longitude)}
+                style={{ width: "100%", height: "100%", border: "none" }}
+                loading="lazy"
+              />
+            </div>
+          </section>
+
           {allPhotos.length > 0 && (
             <div style={{ marginBottom: 20 }}>
               <h2 style={{ fontSize: 16, marginBottom: 10 }}>community photos</h2>
+              <div className="photo-row-shell">
+                <div className="photo-row-scroll">
+                  {allPhotos.slice(0, 6).map((photo, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setSelectedPhoto(photo.src)}
+                      style={{
+                        border: "none", padding: 0, cursor: "pointer", background: "none", flexShrink: 0,
+                        borderRadius: "var(--radius)", overflow: "hidden", width: 94, height: 94
+                      }}
+                    >
+                      <img
+                        src={photo.src}
+                        alt={`${bench.name} by ${photo.author}`}
+                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: "var(--radius)" }}
+                      />
+                    </button>
+                  ))}
+                  {allPhotos.length > 6 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllPhotosModal(true)}
+                      style={{
+                        flexShrink: 0,
+                        width: 94,
+                        height: 94,
+                        borderRadius: 12,
+                        border: "1px solid var(--border)",
+                        background: "rgba(96,88,71,0.35)",
+                        color: "#f6f5f1",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        display: "grid",
+                        placeItems: "center",
+                        textAlign: "center",
+                        padding: 8
+                      }}
+                    >
+                      click for more
+                    </button>
+                  )}
+                </div>
+                <div className="photo-row-fade" />
+              </div>
+            </div>
+          )}
+
+          {showAllPhotosModal && (
+            <div
+              onClick={() => setShowAllPhotosModal(false)}
+              style={{
+                position: "fixed", inset: 0, zIndex: 110,
+                background: "rgba(0,0,0,0.8)", padding: 16, overflowY: "auto"
+              }}
+            >
               <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-                  gap: 8
-                }}
+                className="surface-card"
+                style={{ maxWidth: 760, margin: "20px auto", padding: 14 }}
+                onClick={(e) => e.stopPropagation()}
               >
-                {allPhotos.map((photo, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setSelectedPhoto(photo.src)}
-                    style={{
-                      border: "none", padding: 0, cursor: "pointer", background: "none",
-                      borderRadius: "var(--radius)", overflow: "hidden", aspectRatio: "1"
-                    }}
-                  >
-                    <img
-                      src={photo.src}
-                      alt={`${bench.name} by ${photo.author}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: "var(--radius)" }}
-                    />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <h3 style={{ margin: 0, fontSize: 15 }}>all community photos</h3>
+                  <button type="button" className="button-secondary" onClick={() => setShowAllPhotosModal(false)} style={{ height: 30 }}>
+                    close
                   </button>
-                ))}
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 8 }}>
+                  {allPhotos.map((photo, i) => (
+                    <button
+                      key={`all-${i}`}
+                      type="button"
+                      onClick={() => {
+                        setShowAllPhotosModal(false);
+                        setSelectedPhoto(photo.src);
+                      }}
+                      style={{ border: "none", padding: 0, background: "none", cursor: "pointer" }}
+                    >
+                      <img
+                        src={photo.src}
+                        alt={`Community photo ${i + 1}`}
+                        style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }}
+                      />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -375,9 +470,9 @@ export default function BenchDetailPage() {
             {reviews.length === 0 ? (
               <p className="muted">no benchmarks yet. be the first!</p>
             ) : (
-              <div style={{ display: "grid", gap: 10 }}>
+              <div className="benchmark-carousel" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6 }}>
                 {reviews.map((review) => (
-                  <article key={review.id} className="surface-card" style={{ padding: 14 }}>
+                  <article key={review.id} className="surface-card" style={{ padding: 14, width: 280, flexShrink: 0, scrollSnapAlign: "start" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                       <Link
                         href={`/user/${review.userId}`}

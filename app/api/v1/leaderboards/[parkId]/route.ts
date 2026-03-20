@@ -50,8 +50,23 @@ export async function GET(
       .map(([userId, { points, progress }]) => ({ userId, points, progress }))
       .sort((a, b) => b.points - a.points);
 
+    const userIds = sorted.map((s) => s.userId);
+    let userMap: Record<string, { displayName: string; username: string }> = {};
+    if (userIds.length > 0) {
+      const { data: users } = await supabase.from("users").select("id, display_name, username").in("id", userIds);
+      userMap = (users ?? []).reduce(
+        (acc: Record<string, { displayName: string; username: string }>, u: { id: string; display_name: string; username: string }) => {
+          acc[u.id] = { displayName: u.display_name, username: u.username };
+          return acc;
+        },
+        {}
+      );
+    }
+
     const entries: LeaderboardEntry[] = sorted.map((s, i) => ({
       userId: s.userId,
+      displayName: userMap[s.userId]?.displayName ?? undefined,
+      username: userMap[s.userId]?.username ?? undefined,
       points: s.points,
       progress: s.progress,
       rank: i + 1

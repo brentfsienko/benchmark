@@ -8,6 +8,7 @@ function buildProfile(
   user: Record<string, unknown>,
   benchmarked: string[],
   wishlist: string[],
+  benchmarkCount: number,
   options?: { includePrivateFields?: boolean; includeAvatarBase64?: boolean }
 ): UserProfile {
   const includePrivateFields = options?.includePrivateFields ?? true;
@@ -21,6 +22,7 @@ function buildProfile(
     avatarSymbol: String(user.avatar_symbol || "person.crop.circle.fill"),
     avatarPhotoURL: String(user.avatar_photo_url ?? ""),
     avatarPhotoBase64: includeAvatarBase64 ? String(user.avatar_photo_base64 ?? "") : "",
+    benchmarkCount,
     benchmarkedBenchIDs: includePrivateFields ? benchmarked : [],
     wishlistBenchIDs: includePrivateFields ? wishlist : []
   };
@@ -32,8 +34,9 @@ async function loadBenchmarkedAndWishlist(supabase: ReturnType<typeof createSupa
     supabase.from("wishlist_items").select("bench_id").eq("user_id", id).order("created_at", { ascending: false })
   ]);
   const benchmarked = [...new Set((reviewsRes.data ?? []).map((r: { bench_id: string }) => r.bench_id))];
+  const benchmarkCount = (reviewsRes.data ?? []).length;
   const wishlist = (wishlistRes.data ?? []).map((r: { bench_id: string }) => r.bench_id);
-  return { benchmarked, wishlist };
+  return { benchmarked, wishlist, benchmarkCount };
 }
 
 export async function GET(
@@ -64,9 +67,9 @@ export async function GET(
       return jsonError("Profile is private", "forbidden", 403);
     }
 
-    const { benchmarked, wishlist } = await loadBenchmarkedAndWishlist(supabase, id);
+    const { benchmarked, wishlist, benchmarkCount } = await loadBenchmarkedAndWishlist(supabase, id);
     return jsonData(
-      buildProfile(user, benchmarked, wishlist, {
+      buildProfile(user, benchmarked, wishlist, benchmarkCount, {
         includePrivateFields: viewerIsSelfOrAdmin,
         includeAvatarBase64: viewerIsSelfOrAdmin
       })
@@ -150,8 +153,8 @@ export async function PATCH(
 
     if (!user) return jsonError("User not found", "user_not_found", 404);
 
-    const { benchmarked, wishlist } = await loadBenchmarkedAndWishlist(supabase, id);
-    return jsonData(buildProfile(user, benchmarked, wishlist));
+    const { benchmarked, wishlist, benchmarkCount } = await loadBenchmarkedAndWishlist(supabase, id);
+    return jsonData(buildProfile(user, benchmarked, wishlist, benchmarkCount));
   } catch (err) {
     return jsonError("Invalid payload", "invalid_payload", 400);
   }

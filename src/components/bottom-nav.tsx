@@ -2,6 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { listFollowRequests } from "@/src/lib/api";
+import { useAuth } from "@/src/contexts/auth-context";
 
 function HomeIcon() {
   return (
@@ -52,11 +55,26 @@ const links = [
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { profileId, user } = useAuth();
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || !profileId) {
+      setPendingRequestCount(0);
+      return;
+    }
+    listFollowRequests(profileId)
+      .then((res) => setPendingRequestCount(res.incoming.length))
+      .catch(() => setPendingRequestCount(0));
+  }, [profileId, user, pathname]);
+
   return (
     <nav className="bottom-nav" aria-label="Primary">
       {links.map((item) => {
         const active = pathname?.startsWith(item.href);
         const Icon = item.icon;
+        const isProfileLink = item.href === "/profile";
+        const showRequestsBadge = isProfileLink && pendingRequestCount > 0;
         return (
           <Link
             key={item.href}
@@ -64,7 +82,14 @@ export function BottomNav() {
             className={active ? "active" : undefined}
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}
           >
-            <Icon />
+            <span className="nav-icon-wrap">
+              <Icon />
+              {showRequestsBadge && (
+                <span className="nav-badge" aria-label={`${pendingRequestCount} follow requests`}>
+                  {pendingRequestCount > 9 ? "9+" : pendingRequestCount}
+                </span>
+              )}
+            </span>
             <span style={{ fontSize: 11 }}>{item.label}</span>
           </Link>
         );

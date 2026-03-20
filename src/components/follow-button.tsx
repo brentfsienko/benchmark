@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
-import { followUser, listFollowing, unfollowUser } from "@/src/lib/api";
+import { decideFollowRequest, followUser, listFollowRequests, listFollowing, unfollowUser } from "@/src/lib/api";
+import type { FollowRelationshipState } from "@/src/lib/types";
 
 type FollowButtonProps = {
   targetUserId: string;
@@ -11,7 +12,7 @@ type FollowButtonProps = {
 
 export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
   const { profileId, user } = useAuth();
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [state, setState] = useState<FollowRelationshipState>("none");
   const [loading, setLoading] = useState(true);
 
   const isSelf = profileId === targetUserId;
@@ -21,8 +22,18 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
       setLoading(false);
       return;
     }
-    listFollowing(profileId)
-      .then((ids) => setIsFollowing(ids.includes(targetUserId)))
+    Promise.all([listFollowing(profileId), listFollowRequests(profileId)])
+      .then(([followingIds, req]) => {
+        if (followingIds.includes(targetUserId)) {
+          setState("following");
+          return;
+        }
+        if (req.outgoing.includes(targetUserId)) {
+          setState("requested");
+          return;
+        }
+        setState("none");
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [profileId, targetUserId, isSelf]);
@@ -31,19 +42,22 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
     if (!profileId) return;
     setLoading(true);
     try {
-      if (isFollowing) {
+      if (state === "following" || state === "requested") {
+        if (state === "requested") {
+          await decideFollowRequest(profileId, targetUserId, "cancel");
+        }
         await unfollowUser(profileId, targetUserId);
-        setIsFollowing(false);
+        setState("none");
       } else {
-        await followUser(profileId, targetUserId);
-        setIsFollowing(true);
+        const res = await followUser(profileId, targetUserId);
+        setState(res.state);
       }
     } catch {
       // silently fail
     } finally {
       setLoading(false);
     }
-  }, [profileId, targetUserId, isFollowing]);
+  }, [profileId, targetUserId, state]);
 
   if (isSelf || !user) return null;
   if (loading) return <span className="muted" style={{ fontSize: size === "sm" ? 11 : 13 }}>…</span>;
@@ -56,7 +70,7 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
   return (
     <button
       type="button"
-      className={isFollowing ? "button-secondary" : "button-primary"}
+      className={state === "none" ? "button-primary" : "button-secondary"}
       style={btnStyle}
       onClick={(e) => {
         e.stopPropagation();
@@ -64,7 +78,7 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
         toggle();
       }}
     >
-      {isFollowing ? "following" : "follow"}
+      {state === "following" ? "following" : state === "requested" ? "requested" : "follow"}
     </button>
   );
 }

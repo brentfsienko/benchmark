@@ -1,10 +1,11 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
+import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
 import type { ActivityItem } from "@/src/lib/types";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasSupabase()) {
@@ -12,21 +13,39 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    const feed = request.nextUrl.searchParams.get("feed") === "true";
     const supabase = createSupabaseServer();
+
+    let feedUserIds = [id];
+    if (feed) {
+      const actor = await getRequestActor();
+      if (!actor?.profileId) return jsonError("Authentication required", "unauthorized", 401);
+      if (!requireSelfOrAdmin(actor, id)) return jsonError("Forbidden", "forbidden", 403);
+      const { data: followingRows, error: followingErr } = await supabase
+        .from("user_follows")
+        .select("following_id")
+        .eq("follower_id", id);
+      if (followingErr) {
+        return jsonError("Unable to load feed connections", "internal_error", 500);
+      }
+      feedUserIds = [id, ...((followingRows ?? []).map((r: { following_id: string }) => r.following_id))];
+    }
 
     const { data: reviewRows, error } = await supabase
       .from("bench_reviews")
-      .select("id, bench_id, rating, created_at")
-      .eq("user_id", id)
+      .select("id, user_id, bench_id, rating, created_at")
+      .in("user_id", feedUserIds)
       .order("created_at", { ascending: false })
-      .limit(200);
+      .limit(feed ? 300 : 200);
 
     if (error) {
       return jsonError("Unable to load activity", "internal_error", 500);
     }
 
     const benchIds = [...new Set((reviewRows ?? []).map((r: { bench_id: string }) => r.bench_id))];
+    const userIds = [...new Set((reviewRows ?? []).map((r: { user_id: string }) => r.user_id))];
     let benchNames: Record<string, string> = {};
+    let userNames: Record<string, string> = {};
     if (benchIds.length > 0) {
       const { data: benches } = await supabase.from("benches").select("id, name").in("id", benchIds);
       benchNames = (benches ?? []).reduce(
@@ -37,11 +56,22 @@ export async function GET(
         {}
       );
     }
+    if (userIds.length > 0) {
+      const { data: users } = await supabase.from("users").select("id, display_name").in("id", userIds);
+      userNames = (users ?? []).reduce(
+        (acc: Record<string, string>, u: { id: string; display_name: string }) => {
+          acc[u.id] = u.display_name;
+          return acc;
+        },
+        {}
+      );
+    }
 
     const items: ActivityItem[] = (reviewRows ?? []).map((r: Record<string, unknown>) => ({
       id: String(r.id),
       type: "benchmark" as const,
-      userId: id,
+      userId: String(r.user_id),
+      author: userNames[String(r.user_id)] ?? undefined,
       benchId: String(r.bench_id),
       benchName: benchNames[String(r.bench_id)] ?? "",
       rating: Number(r.rating),

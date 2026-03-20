@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/src/contexts/auth-context";
 import {
+  getChallengeFriendsProgress,
   getBenchSummaries,
   getProfile,
   getParkLeaderboard,
@@ -12,7 +13,7 @@ import {
   listChallenges,
   listNearbyBenches
 } from "@/src/lib/api";
-import type { Bench, Challenge, LeaderboardEntry } from "@/src/lib/types";
+import type { Bench, Challenge, FriendChallengeProgress, LeaderboardEntry } from "@/src/lib/types";
 import { trackEvent } from "@/src/lib/analytics";
 import { FollowButton } from "@/src/components/follow-button";
 
@@ -102,6 +103,7 @@ function ChallengesContent() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [joined, setJoined] = useState(false);
+  const [friendProgress, setFriendProgress] = useState<FriendChallengeProgress[]>([]);
 
   useEffect(() => {
     setLoading(true);
@@ -138,6 +140,13 @@ function ChallengesContent() {
 
         enriched.sort((a, b) => a.name.localeCompare(b.name));
         setBenchList(enriched);
+
+        if (gl) {
+          const friendRows = await getChallengeFriendsProgress(gl.id).catch(() => []);
+          setFriendProgress(friendRows);
+        } else {
+          setFriendProgress([]);
+        }
       })
       .catch((err: Error) => setStatus(err.message))
       .finally(() => setLoading(false));
@@ -147,6 +156,8 @@ function ChallengesContent() {
   const completedBenches = benchList.filter((b) => b.benchmarked).length;
   const pct = totalBenches > 0 ? completedBenches / totalBenches : 0;
   const myEntry = leaderboard.find((e) => e.userId === profileId);
+  const startedFriends = friendProgress.filter((f) => f.started);
+  const completedFriends = friendProgress.filter((f) => f.completed);
 
   const handleJoin = async () => {
     if (!profileId || !challenge) return;
@@ -316,6 +327,12 @@ function ChallengesContent() {
         <p className="muted">loading challenge…</p>
       ) : (
         <>
+          <div className="surface-card" style={{ padding: 12, marginBottom: 10, background: "var(--elevated)" }}>
+            <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>
+              prize preview: no active prize right now. when enabled, everyone who completes this challenge is entered in a raffle.
+            </p>
+          </div>
+
           {/* Hero: progress ring + motivational text */}
           <div
             className="surface-card"
@@ -355,6 +372,49 @@ function ChallengesContent() {
                 </Link>
               </div>
             </div>
+          </div>
+
+          <div className="surface-card" style={{ padding: 12 }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 8px", textTransform: "lowercase" }}>
+              friends in this challenge
+            </h2>
+            {friendProgress.length === 0 ? (
+              <p className="muted" style={{ margin: 0, fontSize: 12 }}>
+                no mutual friends have joined yet.
+              </p>
+            ) : (
+              <>
+                <p className="muted" style={{ margin: "0 0 8px", fontSize: 12 }}>
+                  started: <strong>{startedFriends.length}</strong> • completed: <strong>{completedFriends.length}</strong>
+                </p>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {friendProgress.map((friend) => (
+                    <Link
+                      key={friend.userId}
+                      href={`/user/${friend.userId}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 8,
+                        border: "1px solid var(--border)",
+                        borderRadius: 10,
+                        padding: "8px 10px",
+                        textDecoration: "none"
+                      }}
+                    >
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>
+                        {friend.displayName}
+                        {friend.username ? ` (@${friend.username})` : ""}
+                      </span>
+                      <span className="muted" style={{ fontSize: 12 }}>
+                        {friend.completed ? "completed ✅" : friend.started ? `${friend.progress} done` : "joined"}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Trail progress — visual "stepping stones" around the lake */}
@@ -518,7 +578,7 @@ function ChallengesContent() {
                           color: isMe ? "var(--accent)" : "var(--text-primary)"
                         }}
                       >
-                        {isMe ? "you" : e.userId.slice(0, 12)}
+                        {isMe ? "you" : (e.username ? `@${e.username}` : e.displayName ?? e.userId.slice(0, 12))}
                       </Link>
                     </div>
                   );
@@ -550,7 +610,7 @@ function ChallengesContent() {
                           href={`/user/${entry.userId}`}
                           style={{ fontWeight: 600, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", fontSize: 13 }}
                         >
-                          {entry.userId}{isMe ? " (you)" : ""}
+                          {(entry.displayName ?? entry.username ?? entry.userId)}{isMe ? " (you)" : ""}
                         </Link>
                         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--accent)", whiteSpace: "nowrap" }}>
                           {entry.points} pts
