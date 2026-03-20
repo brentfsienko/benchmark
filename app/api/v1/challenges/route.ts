@@ -10,13 +10,17 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const parkId = searchParams.get("parkId")?.trim();
+    const includeInactive = searchParams.get("includeInactive") === "true";
 
     const supabase = createSupabaseServer();
     let query = supabase
       .from("challenges")
       .select("id, park_id, title, description, starts_at, ends_at, points_per_benchmark, is_active")
-      .eq("is_active", true)
       .order("starts_at", { ascending: false });
+
+    if (!includeInactive) {
+      query = query.eq("is_active", true);
+    }
 
     if (parkId) {
       query = query.eq("park_id", parkId);

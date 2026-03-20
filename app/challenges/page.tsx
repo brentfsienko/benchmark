@@ -17,6 +17,7 @@ import { trackEvent } from "@/src/lib/analytics";
 import { FollowButton } from "@/src/components/follow-button";
 
 const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 };
+const GREEN_LAKE_CHALLENGE_ID = "challenge-gl-summer-2025";
 
 const ACHIEVEMENTS = [
   { id: "first-sit", label: "first sit", icon: "🪑", threshold: 1 },
@@ -71,11 +72,33 @@ function motivationalCopy(pct: number): string {
 }
 
 type BenchWithStatus = Bench & { benchmarked: boolean; reviewCount: number; topPhoto?: string };
+type UpcomingChallenge = {
+  id: string;
+  title: string;
+  description: string;
+  launchLabel: string;
+};
+
+const UPCOMING_CHALLENGES: UpcomingChallenge[] = [
+  {
+    id: "challenge-arboretum-summer-2026",
+    title: "Arboretum Bench Challenge",
+    description: "Explore the Arboretum path network and benchmark key waterside benches.",
+    launchLabel: "launching mid summer 2026"
+  },
+  {
+    id: "challenge-seattle-scavenger-summer-2026",
+    title: "Seattle Scavenger Hunt",
+    description: "A city-wide hunt across hidden benches with clue-based check-ins.",
+    launchLabel: "launching late summer 2026"
+  }
+];
 
 function ChallengesContent() {
   const searchParams = useSearchParams();
   const { profileId } = useAuth();
-  const parkID = searchParams.get("park") ?? "green-lake";
+  const selectedChallengeId = searchParams.get("challenge");
+  const [allChallenges, setAllChallenges] = useState<Challenge[]>([]);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [benchList, setBenchList] = useState<BenchWithStatus[]>([]);
@@ -86,13 +109,14 @@ function ChallengesContent() {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      listChallenges(parkID),
-      getParkLeaderboard(parkID),
+      listChallenges(undefined, true),
+      getParkLeaderboard("green-lake"),
       listNearbyBenches({ lat: GREEN_LAKE_CENTER.lat, lng: GREEN_LAKE_CENTER.lng, radiusMeters: 1500 }),
       profileId ? getProfile(profileId).catch(() => null) : Promise.resolve(null)
     ])
       .then(async ([challengeRows, leaderboardRows, nearbyBenches, userProfile]) => {
-        const gl = challengeRows.find((c) => c.parkId === "green-lake");
+        setAllChallenges(challengeRows);
+        const gl = challengeRows.find((c) => c.id === GREEN_LAKE_CHALLENGE_ID || c.parkId === "green-lake");
         setChallenge(gl ?? null);
         setLeaderboard(leaderboardRows);
 
@@ -120,7 +144,7 @@ function ChallengesContent() {
       })
       .catch((err: Error) => setStatus(err.message))
       .finally(() => setLoading(false));
-  }, [parkID, profileId]);
+  }, [profileId]);
 
   const totalBenches = benchList.length;
   const completedBenches = benchList.filter((b) => b.benchmarked).length;
@@ -134,15 +158,151 @@ function ChallengesContent() {
       setJoined(true);
       setStatus("you're in! go benchmark a bench.");
       trackEvent({ name: "challenge_joined", userId: profileId, metadata: { challengeId: challenge.id } });
-      const lb = await getParkLeaderboard(parkID);
+      const lb = await getParkLeaderboard("green-lake");
       setLeaderboard(lb);
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "could not join");
     }
   };
 
+  const now = new Date();
+  const isCompletedByUser = completedBenches > 0 && totalBenches > 0 && completedBenches >= totalBenches;
+  const activeChallenges = allChallenges.filter((c) => c.isActive && new Date(c.startsAt) <= now && new Date(c.endsAt) >= now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser));
+  const inactiveUpcomingChallenges = allChallenges.filter((c) => new Date(c.startsAt) > now || (!c.isActive && new Date(c.endsAt) >= now));
+  const completedChallenges = allChallenges.filter((c) => c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser);
+  const pastChallenges = allChallenges.filter((c) => new Date(c.endsAt) < now && !(c.id === GREEN_LAKE_CHALLENGE_ID && isCompletedByUser));
+
+  const selectedChallenge = selectedChallengeId
+    ? allChallenges.find((c) => c.id === selectedChallengeId) ?? null
+    : null;
+  const showLanding = !selectedChallengeId;
+  const canOpenDetailedProgress = selectedChallenge?.id === GREEN_LAKE_CHALLENGE_ID;
+
+  if (loading) {
+    return (
+      <section className="screen">
+        <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>play</h1>
+        <p className="muted">loading challenges…</p>
+      </section>
+    );
+  }
+
+  if (showLanding) {
+    return (
+      <section className="screen">
+        <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>play</h1>
+        <p className="muted" style={{ marginTop: 0 }}>choose a challenge</p>
+
+        <section>
+          <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>active</h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {activeChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no active challenges</p> : null}
+            {activeChallenges.map((c) => (
+              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                  {c.id === GREEN_LAKE_CHALLENGE_ID && (
+                    <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--accent)", fontWeight: 600 }}>
+                      your progress: {completedBenches}/{Math.max(totalBenches, 8)}
+                    </p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>upcoming / inactive</h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {inactiveUpcomingChallenges.map((c) => (
+              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--border)" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                  <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
+                    starts {new Date(c.startsAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </Link>
+            ))}
+            {UPCOMING_CHALLENGES.map((c) => (
+              <div key={c.id} className="surface-card" style={{ padding: 14, opacity: 0.55, borderLeft: "3px solid var(--border)" }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>{c.launchLabel}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>completed</h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {completedChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no completed challenges yet</p> : null}
+            {completedChallenges.map((c) => (
+              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                <div className="surface-card" style={{ padding: 14, borderLeft: "3px solid var(--accent)", background: "var(--accent-soft)" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title} ✅</p>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2 style={{ fontSize: 14, margin: "0 0 8px", textTransform: "lowercase" }}>past</h2>
+          <div style={{ display: "grid", gap: 8 }}>
+            {pastChallenges.length === 0 ? <p className="muted" style={{ margin: 0 }}>no past challenges</p> : null}
+            {pastChallenges.map((c) => (
+              <Link key={c.id} href={`/challenges?challenge=${encodeURIComponent(c.id)}`} style={{ textDecoration: "none" }}>
+                <div className="surface-card" style={{ padding: 14, opacity: 0.8, borderLeft: "3px solid var(--border)" }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>{c.title}</p>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>{c.description}</p>
+                  <p className="muted" style={{ margin: "8px 0 0", fontSize: 11 }}>
+                    ended {new Date(c.endsAt).toLocaleDateString()}
+                  </p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </section>
+    );
+  }
+
+  if (!selectedChallenge) {
+    return (
+      <section className="screen">
+        <h1 style={{ marginTop: 0, textTransform: "lowercase" }}>challenge not found</h1>
+        <Link href="/challenges" className="button-secondary">back to challenges</Link>
+      </section>
+    );
+  }
+
+  if (!canOpenDetailedProgress) {
+    return (
+      <section className="screen">
+        <Link href="/challenges" className="button-secondary" style={{ display: "inline-block", marginBottom: 10 }}>← all challenges</Link>
+        <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>
+          {selectedChallenge.title}
+        </h1>
+        <p className="muted" style={{ marginTop: 0 }}>{selectedChallenge.description}</p>
+        <div className="surface-card" style={{ padding: 16 }}>
+          <p style={{ margin: 0, fontSize: 13 }}>
+            this challenge page is coming soon. launch date:{" "}
+            <strong>{new Date(selectedChallenge.startsAt).toLocaleDateString()}</strong>
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="screen">
+      <Link href="/challenges" className="button-secondary" style={{ display: "inline-block", marginBottom: 10 }}>← all challenges</Link>
       <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>
         green lake challenge
       </h1>

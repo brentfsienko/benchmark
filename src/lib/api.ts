@@ -178,9 +178,12 @@ export function readReady(): Promise<{ status: string }> {
   });
 }
 
-export function listChallenges(parkId?: string): Promise<Challenge[]> {
-  const suffix = parkId ? `?parkId=${encodeURIComponent(parkId)}` : "";
-  return request<Challenge[]>(`/challenges${suffix}`);
+export function listChallenges(parkId?: string, includeInactive = false): Promise<Challenge[]> {
+  const params = new URLSearchParams();
+  if (parkId) params.set("parkId", parkId);
+  if (includeInactive) params.set("includeInactive", "true");
+  const suffix = params.toString();
+  return request<Challenge[]>(`/challenges${suffix ? `?${suffix}` : ""}`);
 }
 
 export function joinChallenge(challengeID: string, userID: string): Promise<void> {
