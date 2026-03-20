@@ -98,11 +98,7 @@ export default function PublicProfilePage() {
       {/* Stats */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
         <div className="surface-card" style={{ padding: "12px 16px", textAlign: "center", flex: 1, minWidth: 80 }}>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.visitedBenchIDs.length}</p>
-          <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>visited</p>
-        </div>
-        <div className="surface-card" style={{ padding: "12px 16px", textAlign: "center", flex: 1, minWidth: 80 }}>
-          <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.ratedBenchIDs.length}</p>
+          <p style={{ margin: 0, fontSize: 20, fontWeight: 700 }}>{profile.benchmarkedBenchIDs.length}</p>
           <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>benchmarked</p>
         </div>
         <div className="surface-card" style={{ padding: "12px 16px", textAlign: "center", flex: 1, minWidth: 80 }}>
@@ -120,7 +116,7 @@ export default function PublicProfilePage() {
           {activity.slice(0, 10).map((item) => (
             <article key={item.id} className="surface-card" style={{ padding: 12 }}>
               <p style={{ margin: 0, fontSize: 13 }}>
-                {item.type === "review" ? "benchmarked" : "visited"}{" "}
+                benchmarked{" "}
                 <Link href={`/bench/${item.benchId}`} style={{ color: "var(--accent)", fontWeight: 600 }}>
                   {item.benchName}
                 </Link>

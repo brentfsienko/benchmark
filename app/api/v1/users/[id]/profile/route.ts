@@ -3,6 +3,35 @@ import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { UserProfile } from "@/src/lib/types";
 
+function buildProfile(
+  user: Record<string, unknown>,
+  benchmarked: string[],
+  wishlist: string[]
+): UserProfile {
+  return {
+    id: String(user.id),
+    displayName: String(user.display_name),
+    username: String(user.username),
+    bio: String(user.bio ?? ""),
+    isPublic: Boolean(user.is_public_profile ?? true),
+    avatarSymbol: String(user.avatar_symbol || "person.crop.circle.fill"),
+    avatarPhotoURL: String(user.avatar_photo_url ?? ""),
+    avatarPhotoBase64: String(user.avatar_photo_base64 ?? ""),
+    benchmarkedBenchIDs: benchmarked,
+    wishlistBenchIDs: wishlist
+  };
+}
+
+async function loadBenchmarkedAndWishlist(supabase: ReturnType<typeof createSupabaseServer>, id: string) {
+  const [reviewsRes, wishlistRes] = await Promise.all([
+    supabase.from("bench_reviews").select("bench_id").eq("user_id", id).order("created_at", { ascending: false }),
+    supabase.from("wishlist_items").select("bench_id").eq("user_id", id).order("created_at", { ascending: false })
+  ]);
+  const benchmarked = [...new Set((reviewsRes.data ?? []).map((r: { bench_id: string }) => r.bench_id))];
+  const wishlist = (wishlistRes.data ?? []).map((r: { bench_id: string }) => r.bench_id);
+  return { benchmarked, wishlist };
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,30 +53,8 @@ export async function GET(
       return jsonError("User not found", "user_not_found", 404);
     }
 
-    const [visitedRes, ratedRes, wishlistRes] = await Promise.all([
-      supabase.from("bench_visits").select("bench_id").eq("user_id", id).order("visited_at", { ascending: false }),
-      supabase.from("bench_reviews").select("bench_id").eq("user_id", id).order("created_at", { ascending: false }),
-      supabase.from("wishlist_items").select("bench_id").eq("user_id", id).order("created_at", { ascending: false })
-    ]);
-
-    const visited = [...new Map((visitedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-    const rated = [...new Map((ratedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-    const wishlist = (wishlistRes.data ?? []).map((r: { bench_id: string }) => r.bench_id);
-
-    const profile: UserProfile = {
-      id: user.id,
-      displayName: user.display_name,
-      username: user.username,
-      bio: user.bio ?? "",
-      isPublic: user.is_public_profile ?? true,
-      avatarSymbol: user.avatar_symbol || "person.crop.circle.fill",
-      avatarPhotoURL: user.avatar_photo_url ?? "",
-      avatarPhotoBase64: user.avatar_photo_base64 ?? "",
-      visitedBenchIDs: visited,
-      ratedBenchIDs: rated,
-      wishlistBenchIDs: wishlist
-    };
-    return jsonData(profile);
+    const { benchmarked, wishlist } = await loadBenchmarkedAndWishlist(supabase, id);
+    return jsonData(buildProfile(user, benchmarked, wishlist));
   } catch (err) {
     return jsonError("Unable to load profile", "internal_error", 500);
   }
@@ -90,37 +97,12 @@ export async function PATCH(
       updates.avatar_photo_base64 = v;
     }
 
-    if (Object.keys(updates).length === 0) {
-      const supabase = createSupabaseServer();
-      const { data: user } = await supabase.from("users").select("*").eq("id", id).single();
-      if (!user) return jsonError("User not found", "user_not_found", 404);
-      const [visitedRes, ratedRes, wishlistRes] = await Promise.all([
-        supabase.from("bench_visits").select("bench_id").eq("user_id", id).order("visited_at", { ascending: false }),
-        supabase.from("bench_reviews").select("bench_id").eq("user_id", id).order("created_at", { ascending: false }),
-        supabase.from("wishlist_items").select("bench_id").eq("user_id", id).order("created_at", { ascending: false })
-      ]);
-      const visited = [...new Map((visitedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-      const rated = [...new Map((ratedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-      const wishlist = (wishlistRes.data ?? []).map((r: { bench_id: string }) => r.bench_id);
-      return jsonData({
-        id: user.id,
-        displayName: user.display_name,
-        username: user.username,
-        bio: user.bio ?? "",
-        isPublic: user.is_public_profile ?? true,
-        avatarSymbol: user.avatar_symbol || "person.crop.circle.fill",
-        avatarPhotoURL: user.avatar_photo_url ?? "",
-        avatarPhotoBase64: user.avatar_photo_base64 ?? "",
-        visitedBenchIDs: visited,
-        ratedBenchIDs: rated,
-        wishlistBenchIDs: wishlist
-      });
-    }
-
     const supabase = createSupabaseServer();
-    const { error } = await supabase.from("users").update(updates).eq("id", id);
 
-    if (error) return jsonError("Unable to update profile", "internal_error", 500);
+    if (Object.keys(updates).length > 0) {
+      const { error } = await supabase.from("users").update(updates).eq("id", id);
+      if (error) return jsonError("Unable to update profile", "internal_error", 500);
+    }
 
     const { data: user } = await supabase
       .from("users")
@@ -130,30 +112,8 @@ export async function PATCH(
 
     if (!user) return jsonError("User not found", "user_not_found", 404);
 
-    const [visitedRes, ratedRes, wishlistRes] = await Promise.all([
-      supabase.from("bench_visits").select("bench_id").eq("user_id", id).order("visited_at", { ascending: false }),
-      supabase.from("bench_reviews").select("bench_id").eq("user_id", id).order("created_at", { ascending: false }),
-      supabase.from("wishlist_items").select("bench_id").eq("user_id", id).order("created_at", { ascending: false })
-    ]);
-
-    const visited = [...new Map((visitedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-    const rated = [...new Map((ratedRes.data ?? []).map((r: { bench_id: string }) => [r.bench_id, r.bench_id])).values()];
-    const wishlist = (wishlistRes.data ?? []).map((r: { bench_id: string }) => r.bench_id);
-
-    const profile: UserProfile = {
-      id: user.id,
-      displayName: user.display_name,
-      username: user.username,
-      bio: user.bio ?? "",
-      isPublic: user.is_public_profile ?? true,
-      avatarSymbol: user.avatar_symbol || "person.crop.circle.fill",
-      avatarPhotoURL: user.avatar_photo_url ?? "",
-      avatarPhotoBase64: user.avatar_photo_base64 ?? "",
-      visitedBenchIDs: visited,
-      ratedBenchIDs: rated,
-      wishlistBenchIDs: wishlist
-    };
-    return jsonData(profile);
+    const { benchmarked, wishlist } = await loadBenchmarkedAndWishlist(supabase, id);
+    return jsonData(buildProfile(user, benchmarked, wishlist));
   } catch (err) {
     return jsonError("Invalid payload", "invalid_payload", 400);
   }

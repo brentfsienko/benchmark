@@ -16,8 +16,8 @@ const slides = [
     icon: "📍"
   },
   {
-    title: "benchmark your visit",
-    body: "rate benches you visit and share notes with the community. your benchmarks help others.",
+    title: "benchmark it",
+    body: "rate benches, share notes and photos with the community. your benchmarks help others find the best seats.",
     icon: "⭐"
   },
   {

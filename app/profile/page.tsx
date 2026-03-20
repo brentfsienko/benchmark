@@ -100,7 +100,8 @@ export default function ProfilePage() {
       ) : null}
 
       {profile && profileId && (
-        <div style={{ display: "flex", gap: 24, marginBottom: 12 }}>
+        <div style={{ display: "flex", gap: 20, marginBottom: 12, flexWrap: "wrap" }}>
+          <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkedBenchIDs.length}</strong> benchmarked</span>
           <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers</span>
           <span className="muted"><strong style={{ color: "var(--text-primary)" }}>{following.length}</strong> following</span>
         </div>

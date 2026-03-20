@@ -34,14 +34,13 @@ export type UserProfile = {
   avatarSymbol?: string;
   avatarPhotoURL?: string;
   avatarPhotoBase64?: string;
-  visitedBenchIDs: string[];
-  ratedBenchIDs: string[];
+  benchmarkedBenchIDs: string[];
   wishlistBenchIDs: string[];
 };
 
 export type ActivityItem = {
   id: string;
-  type: "review" | "visit";
+  type: "benchmark";
   userId: string;
   benchId: string;
   benchName: string;

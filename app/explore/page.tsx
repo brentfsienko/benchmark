@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createBench, listNearbyBenches } from "@/src/lib/api";
+import { createBench, getProfile, listNearbyBenches } from "@/src/lib/api";
 import type { Bench } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { ExploreMap } from "@/src/components/explore-map";
@@ -37,8 +37,9 @@ type ExploreFilters = {
 };
 
 export default function ExplorePage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, profileId } = useAuth();
   const [benches, setBenches] = useState<Bench[]>([]);
+  const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,11 +62,11 @@ export default function ExplorePage() {
     setError(null);
     try {
       const data = await listNearbyBenches({
-        lat: 47.6298,
-        lng: -122.3142,
+        lat: 47.6798,
+        lng: -122.3288,
         minRating: nextFilters.minRating,
         type: nextFilters.type,
-        radiusMeters: 2500
+        radiusMeters: 3000
       });
       setBenches(data);
       if (data.length > 0 && !selectedBenchID) {
@@ -85,6 +86,14 @@ export default function ExplorePage() {
   useEffect(() => {
     refresh(filters).catch(() => {});
   }, [filters, refresh]);
+
+  useEffect(() => {
+    if (profileId) {
+      getProfile(profileId)
+        .then((p) => setBenchmarkedIDs(p.benchmarkedBenchIDs))
+        .catch(() => {});
+    }
+  }, [profileId]);
 
   useEffect(() => {
     if (benches.length > 0 && !selectedBenchID) {
@@ -188,6 +197,8 @@ export default function ExplorePage() {
           addMode={addMode}
           tempPlacement={tempPlacement}
           onMapClick={handleMapClick}
+          benchmarkedBenchIDs={benchmarkedIDs}
+          enableFogOfWar={true}
         />
       </div>
 

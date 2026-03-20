@@ -88,13 +88,6 @@ export async function submitBenchmark(
       photoBase64Items: payload.photoBase64Items ?? []
     })
   });
-  await request<unknown>(`/benches/${benchID}/visits`, {
-    method: "POST",
-    body: JSON.stringify({
-      userId,
-      note: "submitted benchmark"
-    })
-  });
 }
 
 export function getProfile(userID: string): Promise<UserProfile> {

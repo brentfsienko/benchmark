@@ -1,11 +1,24 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
 import { listActivity } from "@/src/lib/api";
 import type { ActivityItem } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
+
+function StarRating({ rating }: { rating: number }) {
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.25;
+  const stars: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    if (i < full) stars.push("★");
+    else if (i === full && half) stars.push("½");
+    else stars.push("☆");
+  }
+  return <span style={{ color: "var(--accent)", letterSpacing: 1 }}>{stars.join("")}</span>;
+}
 
 export default function HomePage() {
   const { profileId } = useAuth();
@@ -26,20 +39,34 @@ export default function HomePage() {
 
   return (
     <section className="screen">
-      <SectionHeader title="home" subtitle="friends + local activity" />
+      <SectionHeader title="home" subtitle="your recent benchmarks" />
       {loading ? <p className="muted">loading feed…</p> : null}
       {error ? <p style={{ color: "var(--danger)" }}>{error}</p> : null}
-      <div style={{ display: "grid", gap: "var(--space-4)" }}>
+      {!loading && items.length === 0 && !error && (
+        <div className="surface-card" style={{ padding: 24, textAlign: "center" }}>
+          <p style={{ fontSize: 32, margin: "0 0 12px" }}>🪑</p>
+          <p style={{ margin: "0 0 8px", fontWeight: 600 }}>no benchmarks yet</p>
+          <p className="muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
+            find a bench on the map and submit your first benchmark!
+          </p>
+          <Link href="/explore" className="button-primary" style={{ display: "inline-block" }}>
+            explore benches
+          </Link>
+        </div>
+      )}
+      <div style={{ display: "grid", gap: "var(--space-3)" }}>
         {items.map((item) => (
-          <article key={item.id} className="surface-card" style={{ padding: "var(--space-4)" }}>
-            <p style={{ margin: 0, fontSize: 13, textTransform: "lowercase" }}>
-              {item.type} at <strong>{item.benchName}</strong>
-            </p>
-            {item.rating !== undefined ? <p style={{ margin: "8px 0 0 0" }}>rating {item.rating.toFixed(1)}</p> : null}
-            <p className="muted" style={{ margin: "8px 0 0 0", fontSize: 12 }}>
-              {new Date(item.createdAt).toLocaleString()}
-            </p>
-          </article>
+          <Link key={item.id} href={`/bench/${item.benchId}`} style={{ display: "block" }}>
+            <article className="surface-card" style={{ padding: "var(--space-4)", transition: "transform 0.15s", cursor: "pointer" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{item.benchName}</p>
+                {item.rating !== undefined && <StarRating rating={item.rating} />}
+              </div>
+              <p className="muted" style={{ margin: "6px 0 0", fontSize: 12 }}>
+                benchmarked {new Date(item.createdAt).toLocaleDateString()}
+              </p>
+            </article>
+          </Link>
         ))}
       </div>
     </section>
