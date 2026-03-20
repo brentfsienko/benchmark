@@ -45,14 +45,14 @@ CREATE INDEX IF NOT EXISTS user_follows_following_idx ON user_follows(following_
 -- All coordinates placed on the walking path / park areas (verified on-land)
 INSERT INTO benches (id, name, neighborhood, bench_type, description, view_score, remoteness_score, popularity_score, average_rating, geom, created_by_user_id)
 VALUES
-  ('bench-gl-1', 'North Beach View Bench', 'Green Lake', 'park', 'Classic lake view from the north shore. Great for sunrise.', 4.8, 3.5, 4.5, 4.6, ST_SetSRID(ST_MakePoint(-122.3308, 47.6846), 4326)::geography, 'user-1'),
-  ('bench-gl-2', 'East Green Lake Path Bench', 'Green Lake', 'wooden', 'Shaded spot along the east side loop. Popular with runners.', 4.2, 3.0, 4.8, 4.4, ST_SetSRID(ST_MakePoint(-122.3200, 47.6808), 4326)::geography, 'user-1'),
-  ('bench-gl-3', 'South Duck Pond Bench', 'Green Lake', 'park', 'Near the duck pond. Kids and waterfowl watching.', 4.0, 2.8, 4.6, 4.3, ST_SetSRID(ST_MakePoint(-122.3276, 47.6750), 4326)::geography, 'user-1'),
-  ('bench-gl-4', 'West Side Sunset Bench', 'Green Lake', 'wooden', 'Best sunset views over the water. Bring a blanket.', 4.9, 3.8, 4.2, 4.7, ST_SetSRID(ST_MakePoint(-122.3379, 47.6798), 4326)::geography, 'user-1'),
-  ('bench-gl-5', 'Community Center Lawn Bench', 'Green Lake', 'park', 'By the community center. People-watching central.', 4.1, 2.5, 4.9, 4.2, ST_SetSRID(ST_MakePoint(-122.3235, 47.6838), 4326)::geography, 'user-1'),
-  ('bench-gl-6', 'Bathhouse Theater Bench', 'Green Lake', 'stone', 'Quiet corner near the bathhouse theater. Morning readers.', 4.4, 4.0, 3.8, 4.5, ST_SetSRID(ST_MakePoint(-122.3344, 47.6842), 4326)::geography, 'user-1'),
-  ('bench-gl-7', 'Woodland Park Connector Bench', 'Green Lake', 'wooden', 'Where Green Lake meets Woodland Park. Shady and cool.', 4.3, 4.2, 3.5, 4.4, ST_SetSRID(ST_MakePoint(-122.3363, 47.6766), 4326)::geography, 'user-1'),
-  ('bench-gl-8', 'Stone Way Approach Bench', 'Green Lake', 'modern', 'Modern bench near Stone Way. Good for a quick pause.', 4.0, 3.2, 4.4, 4.2, ST_SetSRID(ST_MakePoint(-122.3195, 47.6823), 4326)::geography, 'user-1')
+  ('bench-gl-1', 'North Beach View Bench', 'Green Lake', 'park', 'Classic lake view from the north shore. Great for sunrise.', 4.8, 3.5, 4.5, 4.6, ST_SetSRID(ST_MakePoint(-122.3360, 47.6833), 4326)::geography, 'user-1'),
+  ('bench-gl-2', 'East Green Lake Path Bench', 'Green Lake', 'wooden', 'Shaded spot along the east side loop. Popular with runners.', 4.2, 3.0, 4.8, 4.4, ST_SetSRID(ST_MakePoint(-122.3314, 47.6849), 4326)::geography, 'user-1'),
+  ('bench-gl-3', 'South Duck Pond Bench', 'Green Lake', 'park', 'Near the duck pond. Kids and waterfowl watching.', 4.0, 2.8, 4.6, 4.3, ST_SetSRID(ST_MakePoint(-122.3245, 47.6838), 4326)::geography, 'user-1'),
+  ('bench-gl-4', 'West Side Sunset Bench', 'Green Lake', 'wooden', 'Best sunset views over the water. Bring a blanket.', 4.9, 3.8, 4.2, 4.7, ST_SetSRID(ST_MakePoint(-122.3210, 47.6809), 4326)::geography, 'user-1'),
+  ('bench-gl-5', 'Community Center Lawn Bench', 'Green Lake', 'park', 'By the community center. People-watching central.', 4.1, 2.5, 4.9, 4.2, ST_SetSRID(ST_MakePoint(-122.3224, 47.6771), 4326)::geography, 'user-1'),
+  ('bench-gl-6', 'Bathhouse Theater Bench', 'Green Lake', 'stone', 'Quiet corner near the bathhouse theater. Morning readers.', 4.4, 4.0, 3.8, 4.5, ST_SetSRID(ST_MakePoint(-122.3277, 47.6754), 4326)::geography, 'user-1'),
+  ('bench-gl-7', 'Woodland Park Connector Bench', 'Green Lake', 'wooden', 'Where Green Lake meets Woodland Park. Shady and cool.', 4.3, 4.2, 3.5, 4.4, ST_SetSRID(ST_MakePoint(-122.3344, 47.6766), 4326)::geography, 'user-1'),
+  ('bench-gl-8', 'Stone Way Approach Bench', 'Green Lake', 'modern', 'Modern bench near Stone Way. Good for a quick pause.', 4.0, 3.2, 4.4, 4.2, ST_SetSRID(ST_MakePoint(-122.3374, 47.6795), 4326)::geography, 'user-1')
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name, neighborhood = EXCLUDED.neighborhood, bench_type = EXCLUDED.bench_type,
   description = EXCLUDED.description, view_score = EXCLUDED.view_score, remoteness_score = EXCLUDED.remoteness_score,
