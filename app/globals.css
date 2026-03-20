@@ -203,6 +203,67 @@ main {
   border: none !important;
 }
 
+/* Fog of war cloud overlay */
+.fog-overlay-container {
+  transition: opacity 0.6s ease;
+}
+
+.fog-cloud-layer {
+  position: absolute;
+  inset: -60%;
+  width: 220%;
+  height: 220%;
+}
+
+.fog-layer-1 {
+  filter: url(#cloud-turbulence);
+  animation: fog-drift-1 80s linear infinite;
+}
+
+.fog-layer-2 {
+  filter: url(#cloud-turbulence-2);
+  animation: fog-drift-2 60s linear infinite;
+  opacity: 0.6;
+}
+
+.fog-layer-3 {
+  background: radial-gradient(ellipse 40% 35% at 30% 40%, rgba(239,229,214,0.5), transparent),
+              radial-gradient(ellipse 35% 40% at 70% 55%, rgba(239,229,214,0.4), transparent),
+              radial-gradient(ellipse 50% 30% at 50% 70%, rgba(239,229,214,0.35), transparent),
+              radial-gradient(ellipse 30% 25% at 20% 75%, rgba(239,229,214,0.3), transparent),
+              radial-gradient(ellipse 45% 30% at 80% 30%, rgba(239,229,214,0.3), transparent);
+  animation: fog-drift-3 45s ease-in-out infinite alternate;
+}
+
+@keyframes fog-drift-1 {
+  0%   { transform: translate(0, 0); }
+  25%  { transform: translate(2%, 1%); }
+  50%  { transform: translate(0, 2%); }
+  75%  { transform: translate(-2%, 1%); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes fog-drift-2 {
+  0%   { transform: translate(0, 0); }
+  33%  { transform: translate(-3%, 1.5%); }
+  66%  { transform: translate(1%, -2%); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes fog-drift-3 {
+  0%   { transform: translate(0, 0) scale(1); }
+  50%  { transform: translate(3%, -1%) scale(1.03); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+/* VP coming soon badge in fog */
+.vp-coming-soon {
+  position: absolute;
+  pointer-events: none;
+  z-index: 3;
+  transition: left 0.05s, top 0.05s;
+}
+
 .explore-carousel {
   scrollbar-width: none;
   -ms-overflow-style: none;

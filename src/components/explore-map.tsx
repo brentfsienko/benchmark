@@ -3,44 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import type { Map, Marker } from "leaflet";
 import type { Bench } from "@/src/lib/types";
+import { FogOverlay } from "./fog-overlay";
 
 const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 } as const;
 const VOLUNTEER_PARK_CENTER = { lat: 47.6298, lng: -122.3142 } as const;
 const DEFAULT_ZOOM = 14;
-
-const GREEN_LAKE_OUTLINE: [number, number][] = [
-  [47.6835, -122.3380],
-  [47.6845, -122.3340],
-  [47.6848, -122.3290],
-  [47.6843, -122.3240],
-  [47.6830, -122.3200],
-  [47.6810, -122.3175],
-  [47.6790, -122.3165],
-  [47.6770, -122.3170],
-  [47.6752, -122.3190],
-  [47.6742, -122.3220],
-  [47.6740, -122.3260],
-  [47.6745, -122.3300],
-  [47.6755, -122.3335],
-  [47.6770, -122.3360],
-  [47.6790, -122.3378],
-  [47.6810, -122.3385],
-  [47.6825, -122.3384]
-];
-
-const VOLUNTEER_PARK_OUTLINE: [number, number][] = [
-  [47.6325, -122.3180],
-  [47.6325, -122.3100],
-  [47.6268, -122.3100],
-  [47.6268, -122.3180]
-];
-
-const WORLD_BOUNDS: [number, number][] = [
-  [85, -180],
-  [85, 180],
-  [-85, 180],
-  [-85, -180]
-];
 
 function benchPinSvg(selected: boolean, benchmarked?: boolean): string {
   const size = selected ? 32 : 24;
@@ -91,7 +58,9 @@ export function ExploreMap({
   const mapInstanceRef = useRef<Map | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
+  const vpMarkerRef = useRef<Marker | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -125,49 +94,8 @@ export function ExploreMap({
 
       L.default.control.zoom({ position: "bottomright" }).addTo(map);
 
-      if (enableFogOfWar) {
-        L.default.polygon(
-          [WORLD_BOUNDS, GREEN_LAKE_OUTLINE],
-          {
-            color: "transparent",
-            fillColor: "#23201b",
-            fillOpacity: 0.45,
-            interactive: false
-          }
-        ).addTo(map);
-
-        L.default.polygon(VOLUNTEER_PARK_OUTLINE, {
-          color: "transparent",
-          fillColor: "#23201b",
-          fillOpacity: 0.65,
-          interactive: false
-        }).addTo(map);
-
-        const vpIcon = L.default.divIcon({
-          className: "bench-pin",
-          html: `<div style="
-            background: rgba(45,106,79,0.9);
-            color: #f7f1e8;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            font-family: inherit;
-            white-space: nowrap;
-            text-align: center;
-            line-height: 1.3;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          ">🔒 volunteer park<br/>coming summer 2026</div>`,
-          iconSize: [160, 40],
-          iconAnchor: [80, 20]
-        });
-        L.default.marker(
-          [VOLUNTEER_PARK_CENTER.lat, VOLUNTEER_PARK_CENTER.lng],
-          { icon: vpIcon, interactive: false }
-        ).addTo(map);
-      }
-
       mapInstanceRef.current = map;
+      setMapReady(true);
 
       const flyTo = (lat: number, lng: number) => {
         map.flyTo([lat, lng], 16, { duration: 0.35 });
@@ -181,8 +109,47 @@ export function ExploreMap({
       markersRef.current = [];
       tempMarkerRef.current?.remove();
       tempMarkerRef.current = null;
+      vpMarkerRef.current?.remove();
+      vpMarkerRef.current = null;
+      setMapReady(false);
     };
-  }, [mounted, onMapReady, enableFogOfWar]);
+  }, [mounted, onMapReady]);
+
+  // VP "coming soon" marker -- only when fog is on
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+
+    void import("leaflet").then((L) => {
+      vpMarkerRef.current?.remove();
+      vpMarkerRef.current = null;
+
+      if (enableFogOfWar) {
+        const vpIcon = L.default.divIcon({
+          className: "bench-pin",
+          html: `<div style="
+            background: rgba(45,106,79,0.92);
+            color: #f7f1e8;
+            padding: 8px 14px;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
+            white-space: nowrap;
+            text-align: center;
+            line-height: 1.4;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+            backdrop-filter: blur(4px);
+          ">🔒 volunteer park<br/>coming summer 2026</div>`,
+          iconSize: [160, 44],
+          iconAnchor: [80, 22]
+        });
+        vpMarkerRef.current = L.default.marker(
+          [VOLUNTEER_PARK_CENTER.lat, VOLUNTEER_PARK_CENTER.lng],
+          { icon: vpIcon, interactive: false }
+        ).addTo(mapInstanceRef.current!);
+      }
+    });
+  }, [mapReady, enableFogOfWar]);
 
   useEffect(() => {
     if (!mounted || !mapInstanceRef.current) return;
@@ -271,14 +238,22 @@ export function ExploreMap({
   }
 
   return (
-    <div
-      ref={mapRef}
-      style={{
-        width: "100%",
-        height: "100%",
-        minHeight: 200,
-        overflow: "hidden"
-      }}
-    />
+    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 200 }}>
+      <div
+        ref={mapRef}
+        style={{
+          width: "100%",
+          height: "100%",
+          minHeight: 200,
+          overflow: "hidden"
+        }}
+      />
+      {enableFogOfWar && mapReady && mapInstanceRef.current && (
+        <FogOverlay
+          mapInstance={mapInstanceRef.current}
+          greenLakeCenter={GREEN_LAKE_CENTER}
+        />
+      )}
+    </div>
   );
 }

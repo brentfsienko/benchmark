@@ -40,6 +40,7 @@ export default function ExplorePage() {
   const { isAdmin, profileId } = useAuth();
   const [benches, setBenches] = useState<Bench[]>([]);
   const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
+  const [fogEnabled, setFogEnabled] = useState(true);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,7 +199,7 @@ export default function ExplorePage() {
           tempPlacement={tempPlacement}
           onMapClick={handleMapClick}
           benchmarkedBenchIDs={benchmarkedIDs}
-          enableFogOfWar={true}
+          enableFogOfWar={fogEnabled}
         />
       </div>
 
@@ -214,7 +215,32 @@ export default function ExplorePage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <BenchmarkLogo size={32} />
-          <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => setFogEnabled((v) => !v)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 12,
+                padding: "6px 10px",
+                height: 32,
+                borderRadius: 999,
+                border: fogEnabled ? "1px solid var(--accent)" : "1px solid var(--border)",
+                background: fogEnabled ? "var(--accent-soft)" : "var(--surface)",
+                color: fogEnabled ? "var(--accent)" : "var(--text-secondary)",
+                fontWeight: fogEnabled ? 600 : 500,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.2s"
+              }}
+            >
+              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+              </svg>
+              {fogEnabled ? "challenge on" : "challenge off"}
+            </button>
             <button
               type="button"
               className="button-secondary"
