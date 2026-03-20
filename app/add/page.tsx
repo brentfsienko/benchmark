@@ -236,7 +236,7 @@ export default function AddBenchPage() {
             value={neighborhood}
             onChange={(e) => setNeighborhood(e.target.value)}
             required
-            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: "var(--radius)", border: "1px solid var(--border)" }}
+            style={{ width: "100%", marginTop: 6 }}
           >
             {NEIGHBORHOODS.map((n) => (
               <option key={n} value={n}>{n}</option>
@@ -257,7 +257,7 @@ export default function AddBenchPage() {
           <select
             value={type}
             onChange={(e) => setType(e.target.value)}
-            style={{ width: "100%", marginTop: 6, padding: 10, borderRadius: "var(--radius)", border: "1px solid var(--border)" }}
+            style={{ width: "100%", marginTop: 6 }}
           >
             {BENCH_TYPES.map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
