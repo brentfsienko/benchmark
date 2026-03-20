@@ -36,6 +36,14 @@ type ExploreFilters = {
   type?: string;
 };
 
+const BENCH_TYPE_LABELS: Record<string, string> = {
+  park: "park",
+  wooden: "wooden",
+  stone: "stone",
+  modern: "modern",
+  memorial: "memorial"
+};
+
 export default function ExplorePage() {
   const { isAdmin, profileId } = useAuth();
   const [benches, setBenches] = useState<Bench[]>([]);
@@ -70,9 +78,10 @@ export default function ExplorePage() {
         radiusMeters: 3000
       });
       setBenches(data);
-      if (data.length > 0 && !selectedBenchID) {
-        setSelectedBenchID(data[0].id);
-      }
+      setSelectedBenchID((prev) => {
+        if (prev && data.some((b) => b.id === prev)) return prev;
+        return data.length > 0 ? data[0].id : null;
+      });
       trackEvent({
         name: "explore_loaded",
         metadata: { count: data.length, hasType: Boolean(nextFilters.type), hasMinRating: Boolean(nextFilters.minRating) }
@@ -82,11 +91,22 @@ export default function ExplorePage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedBenchID]);
+  }, []);
 
   useEffect(() => {
     refresh(filters).catch(() => {});
   }, [filters, refresh]);
+
+  const toggleFilter = useCallback((key: keyof ExploreFilters, value: unknown) => {
+    setFilters((prev) => {
+      if (prev[key] === value) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: value };
+    });
+  }, []);
 
   useEffect(() => {
     if (profileId) {
@@ -243,60 +263,107 @@ export default function ExplorePage() {
             </button>
             <button
               type="button"
-              className="button-secondary"
-              style={{ fontSize: 12, padding: "6px 10px", height: 32 }}
               onClick={() => setIsFilterOpen((o) => !o)}
+              style={{
+                fontSize: 12,
+                padding: "6px 10px",
+                height: 32,
+                borderRadius: 999,
+                border: (filters.minRating || filters.type) ? "1px solid var(--accent)" : "1px solid var(--border)",
+                background: (filters.minRating || filters.type) ? "var(--accent-soft)" : "var(--surface)",
+                color: (filters.minRating || filters.type) ? "var(--accent)" : "var(--text-primary)",
+                fontWeight: (filters.minRating || filters.type) ? 600 : 500,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                transition: "all 0.2s"
+              }}
             >
-              filters
+              filters{(filters.minRating || filters.type) ? " ●" : ""}
             </button>
           </div>
         </div>
 
         {isFilterOpen && (
-          <div
-            style={{
-              marginTop: 10,
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap"
-            }}
-          >
-            <button
-              type="button"
-              className="button-secondary"
-              style={{ fontSize: 12, padding: "6px 10px", height: 32 }}
-              onClick={() => {
-                const next = { ...filters, minRating: 4.0 };
-                setFilters(next);
-                refresh(next).catch(() => {});
-              }}
-            >
-              rating 4.0+
-            </button>
-            <button
-              type="button"
-              className="button-secondary"
-              style={{ fontSize: 12, padding: "6px 10px", height: 32 }}
-              onClick={() => {
-                const next = { ...filters, type: "park" };
-                setFilters(next);
-                refresh(next).catch(() => {});
-              }}
-            >
-              park type
-            </button>
-            <button
-              type="button"
-              className="button-secondary"
-              style={{ fontSize: 12, padding: "6px 10px", height: 32 }}
-              onClick={() => {
-                const next = {};
-                setFilters(next);
-                refresh(next).catch(() => {});
-              }}
-            >
-              clear
-            </button>
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="muted" style={{ fontSize: 11, fontWeight: 600, width: 50 }}>rating</span>
+              {[3.0, 4.0, 4.5].map((r) => {
+                const active = filters.minRating === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => toggleFilter("minRating", r)}
+                    style={{
+                      fontSize: 12,
+                      padding: "5px 10px",
+                      height: 30,
+                      borderRadius: 999,
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: active ? "var(--accent)" : "var(--surface)",
+                      color: active ? "#f6f5f1" : "var(--text-primary)",
+                      fontWeight: active ? 600 : 400,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "all 0.15s"
+                    }}
+                  >
+                    {r}+ ★
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="muted" style={{ fontSize: 11, fontWeight: 600, width: 50 }}>type</span>
+              {Object.entries(BENCH_TYPE_LABELS).map(([value, label]) => {
+                const active = filters.type === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => toggleFilter("type", value)}
+                    style={{
+                      fontSize: 12,
+                      padding: "5px 10px",
+                      height: 30,
+                      borderRadius: 999,
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: active ? "var(--accent)" : "var(--surface)",
+                      color: active ? "#f6f5f1" : "var(--text-primary)",
+                      fontWeight: active ? 600 : 400,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "all 0.15s"
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {(filters.minRating || filters.type) && (
+              <button
+                type="button"
+                onClick={() => setFilters({})}
+                style={{
+                  alignSelf: "flex-start",
+                  fontSize: 11,
+                  padding: "4px 10px",
+                  height: 26,
+                  borderRadius: 999,
+                  border: "1px solid var(--danger)",
+                  background: "transparent",
+                  color: "var(--danger)",
+                  cursor: "pointer",
+                  fontFamily: "inherit"
+                }}
+              >
+                clear all filters
+              </button>
+            )}
+            <p className="muted" style={{ margin: 0, fontSize: 11 }}>
+              showing {benches.length} bench{benches.length !== 1 ? "es" : ""}
+            </p>
           </div>
         )}
       </header>
