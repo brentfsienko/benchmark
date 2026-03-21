@@ -39,14 +39,10 @@ export function MiniBenchMap({ latitude, longitude, markerLabel }: MiniBenchMapP
         center: [latitude, longitude],
         zoom: 16,
         zoomControl: false,
-        dragging: false,
-        doubleClickZoom: false,
-        scrollWheelZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        touchZoom: false,
         attributionControl: false
       });
+
+      L.default.control.zoom({ position: "bottomright" }).addTo(map);
 
       L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
