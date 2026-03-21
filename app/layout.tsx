@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
 import { AuthProvider } from "@/src/contexts/auth-context";
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main>{children}</main>
           <BottomNav />
         </AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
