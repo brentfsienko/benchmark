@@ -32,7 +32,9 @@ AS $$
   LIMIT 500;
 $$;
 
--- Replace list_nearby_benches to inline tags via array_agg (eliminates 2nd query)
+-- Drop old signature first because return type changed (added tags column)
+DROP FUNCTION IF EXISTS list_nearby_benches(double precision, double precision, double precision, double precision, double precision, double precision, text);
+
 CREATE OR REPLACE FUNCTION list_nearby_benches(
   p_lat double precision DEFAULT NULL,
   p_lng double precision DEFAULT NULL,
