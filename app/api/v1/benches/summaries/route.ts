@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonData, jsonError } from "@/src/lib/api-response";
+import { jsonCachedData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 
 export type BenchSummary = {
@@ -15,43 +15,42 @@ export async function GET(request: NextRequest) {
   try {
     const ids = request.nextUrl.searchParams.get("ids");
     if (!ids) {
-      return jsonData<BenchSummary[]>([]);
+      return jsonCachedData<BenchSummary[]>([], 60, 300);
     }
     const benchIds = ids.split(",").map((s) => s.trim()).filter(Boolean);
     if (benchIds.length === 0) {
-      return jsonData<BenchSummary[]>([]);
+      return jsonCachedData<BenchSummary[]>([], 60, 300);
     }
 
     const supabase = createSupabaseServer();
 
-    // Query 1: lightweight count (no photo data transferred)
-    const { data: countRows, error: countErr } = await supabase
-      .from("bench_reviews")
-      .select("bench_id")
-      .in("bench_id", benchIds);
+    const [countRes, photoRes] = await Promise.all([
+      supabase
+        .from("bench_reviews")
+        .select("bench_id")
+        .in("bench_id", benchIds),
+      supabase
+        .from("bench_reviews")
+        .select("bench_id, photo_base64_items")
+        .in("bench_id", benchIds)
+        .not("photo_base64_items", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(benchIds.length),
+    ]);
 
-    if (countErr) {
-      console.error("bench summaries count error:", countErr);
+    if (countRes.error) {
+      console.error("bench summaries count error:", countRes.error);
       return jsonError("Unable to load summaries", "internal_error", 500);
     }
 
     const countMap: Record<string, number> = {};
-    for (const r of countRows ?? []) {
+    for (const r of countRes.data ?? []) {
       const bid = String(r.bench_id);
       countMap[bid] = (countMap[bid] ?? 0) + 1;
     }
 
-    // Query 2: only reviews that actually have photos, limited to 1 per bench
-    // Fetch newest first so we get the most recent photo per bench
-    const { data: photoRows } = await supabase
-      .from("bench_reviews")
-      .select("bench_id, photo_base64_items")
-      .in("bench_id", benchIds)
-      .not("photo_base64_items", "is", null)
-      .order("created_at", { ascending: false });
-
     const photoMap: Record<string, string> = {};
-    for (const r of photoRows ?? []) {
+    for (const r of photoRes.data ?? []) {
       const bid = String(r.bench_id);
       if (bid in photoMap) continue;
       const photos = Array.isArray(r.photo_base64_items) ? r.photo_base64_items : [];
@@ -66,7 +65,7 @@ export async function GET(request: NextRequest) {
       topPhoto: photoMap[id] ?? null
     }));
 
-    return jsonData(summaries);
+    return jsonCachedData(summaries, 60, 300);
   } catch (err) {
     console.error("bench summaries error:", err);
     return jsonError("Unable to load summaries", "internal_error", 500);

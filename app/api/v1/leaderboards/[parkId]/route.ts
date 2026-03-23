@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonData, jsonError } from "@/src/lib/api-response";
+import { jsonCachedData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { LeaderboardEntry } from "@/src/lib/types";
 
@@ -22,20 +22,16 @@ export async function GET(
 
     const challengeIds = (challenges ?? []).map((c: { id: string }) => c.id);
     if (challengeIds.length === 0) {
-      return jsonData([]);
+      return jsonCachedData([], 30, 120);
     }
 
-    const allParticipants: { user_id: string; points: number; progress_count: number }[] = [];
-    for (const cid of challengeIds) {
-      const { data } = await supabase
-        .from("challenge_participants")
-        .select("user_id, points, progress_count")
-        .eq("challenge_id", cid)
-        .order("points", { ascending: false });
-      allParticipants.push(...(data ?? []));
-    }
+    const { data: allParticipants } = await supabase
+      .from("challenge_participants")
+      .select("user_id, points, progress_count")
+      .in("challenge_id", challengeIds)
+      .order("points", { ascending: false });
 
-    const byUser = allParticipants.reduce(
+    const byUser = (allParticipants ?? []).reduce(
       (acc: Record<string, { points: number; progress: number }>, p: { user_id: string; points: number; progress_count: number }) => {
         const key = p.user_id;
         if (!acc[key]) acc[key] = { points: 0, progress: 0 };
@@ -71,7 +67,7 @@ export async function GET(
       progress: s.progress,
       rank: i + 1
     }));
-    return jsonData(entries);
+    return jsonCachedData(entries, 30, 120);
   } catch (err) {
     return jsonError("Unable to load leaderboard", "internal_error", 500);
   }

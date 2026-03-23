@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonData, jsonError } from "@/src/lib/api-response";
+import { jsonCachedData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { Challenge } from "@/src/lib/types";
 
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       pointsPerBenchmark: Number(c.points_per_benchmark ?? 10),
       isActive: Boolean(c.is_active)
     }));
-    return jsonData(challenges);
+    return jsonCachedData(challenges, 60, 300);
   } catch (err) {
     return jsonError("Unable to load challenges", "internal_error", 500);
   }
