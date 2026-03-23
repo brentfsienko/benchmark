@@ -14,6 +14,16 @@ export type Bench = {
   tags: string[];
 };
 
+export type BenchPin = {
+  id: string;
+  name: string;
+  neighborhood: string;
+  type: string;
+  averageRating: number;
+  latitude: number;
+  longitude: number;
+};
+
 export type BenchReview = {
   id: string;
   benchId: string;

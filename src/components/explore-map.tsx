@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Map, Marker } from "leaflet";
-import type { Bench } from "@/src/lib/types";
+import type { BenchPin } from "@/src/lib/types";
 import { FogOverlay } from "./fog-overlay";
+
+export type ViewportBounds = {
+  sw_lat: number;
+  sw_lng: number;
+  ne_lat: number;
+  ne_lng: number;
+};
 
 const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 } as const;
 const VOLUNTEER_PARK_CENTER = { lat: 47.6298, lng: -122.3142 } as const;
@@ -39,10 +46,11 @@ function userLocationSvg(): string {
 }
 
 type ExploreMapProps = {
-  benches: Bench[];
+  benches: BenchPin[];
   selectedBenchID: string | null;
-  onSelectBench: (bench: Bench) => void;
+  onSelectBench: (bench: BenchPin) => void;
   onMapReady?: (flyTo: (lat: number, lng: number) => void) => void;
+  onBoundsChange?: (bounds: ViewportBounds) => void;
   addMode?: boolean;
   tempPlacement?: { lat: number; lng: number } | null;
   onMapClick?: (lat: number, lng: number) => void;
@@ -55,6 +63,7 @@ export function ExploreMap({
   selectedBenchID,
   onSelectBench,
   onMapReady,
+  onBoundsChange,
   addMode = false,
   tempPlacement = null,
   onMapClick,
@@ -68,8 +77,24 @@ export function ExploreMap({
   const vpMarkerRef = useRef<Marker | null>(null);
   const userMarkerRef = useRef<Marker | null>(null);
   const geoWatchIDRef = useRef<number | null>(null);
+  const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onBoundsChangeRef = useRef(onBoundsChange);
+  onBoundsChangeRef.current = onBoundsChange;
   const [mounted, setMounted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+
+  const emitBounds = useCallback((map: Map) => {
+    if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
+    boundsTimerRef.current = setTimeout(() => {
+      const b = map.getBounds();
+      onBoundsChangeRef.current?.({
+        sw_lat: b.getSouthWest().lat,
+        sw_lng: b.getSouthWest().lng,
+        ne_lat: b.getNorthEast().lat,
+        ne_lng: b.getNorthEast().lng,
+      });
+    }, 300);
+  }, []);
 
   useEffect(() => {
     setMounted(true);
@@ -106,6 +131,9 @@ export function ExploreMap({
       mapInstanceRef.current = map;
       setMapReady(true);
 
+      emitBounds(map);
+      map.on("moveend", () => emitBounds(map));
+
       const flyTo = (lat: number, lng: number) => {
         map.flyTo([lat, lng], 16, { duration: 0.35 });
       };
@@ -113,6 +141,7 @@ export function ExploreMap({
     });
 
     return () => {
+      if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       markersRef.current = [];
@@ -128,7 +157,7 @@ export function ExploreMap({
       }
       setMapReady(false);
     };
-  }, [mounted, onMapReady]);
+  }, [mounted, onMapReady, emitBounds]);
 
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof window === "undefined") return;

@@ -2,6 +2,7 @@ import { env, getApiBaseUrl } from "./env";
 import type {
   ActivityItem,
   Bench,
+  BenchPin,
   BenchReview,
   Challenge,
   FriendChallengeProgress,
@@ -67,6 +68,26 @@ export async function listNearbyBenches(filters: NearbyBenchFilters): Promise<Be
     }
   });
   return request<Bench[]>(`/benches/nearby?${params.toString()}`);
+}
+
+export type BenchPinBounds = {
+  sw_lat: number;
+  sw_lng: number;
+  ne_lat: number;
+  ne_lng: number;
+};
+
+export async function listBenchPins(bounds: BenchPinBounds, minRating?: number): Promise<BenchPin[]> {
+  const params = new URLSearchParams({
+    sw_lat: String(bounds.sw_lat),
+    sw_lng: String(bounds.sw_lng),
+    ne_lat: String(bounds.ne_lat),
+    ne_lng: String(bounds.ne_lng),
+  });
+  if (minRating !== undefined && minRating !== null) {
+    params.set("minRating", String(minRating));
+  }
+  return request<BenchPin[]>(`/benches/pins?${params.toString()}`);
 }
 
 export function getBench(benchID: string): Promise<Bench> {

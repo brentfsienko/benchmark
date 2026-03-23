@@ -1,9 +1,13 @@
 import { NextRequest } from "next/server";
-import { jsonData, jsonError } from "@/src/lib/api-response";
+import { jsonCachedData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { Bench } from "@/src/lib/types";
 
-function toBench(row: Record<string, unknown>, tags: string[]): Bench {
+function toBench(row: Record<string, unknown>): Bench {
+  const rawTags = row.tags;
+  const tags: string[] = Array.isArray(rawTags)
+    ? rawTags.map(String)
+    : [];
   return {
     id: String(row.id),
     name: String(row.name),
@@ -17,7 +21,7 @@ function toBench(row: Record<string, unknown>, tags: string[]): Bench {
     distanceMeters: Number(row.distance_meters ?? 0),
     latitude: Number(row.latitude),
     longitude: Number(row.longitude),
-    tags
+    tags,
   };
 }
 
@@ -43,7 +47,7 @@ export async function GET(request: NextRequest) {
       p_min_rating: minRating ? parseFloat(minRating) : null,
       p_min_view_score: minViewScore ? parseFloat(minViewScore) : null,
       p_min_remoteness_score: minRemotenessScore ? parseFloat(minRemotenessScore) : null,
-      p_bench_type: type || null
+      p_bench_type: type || null,
     });
 
     if (error) {
@@ -51,27 +55,8 @@ export async function GET(request: NextRequest) {
       return jsonError("Unable to load benches", "internal_error", 500);
     }
 
-    const benchIds = (rows ?? []).map((r: Record<string, unknown>) => r.id);
-    let tagsMap: Record<string, string[]> = {};
-    if (benchIds.length > 0) {
-      const { data: tagRows } = await supabase
-        .from("bench_tags")
-        .select("bench_id, tag")
-        .in("bench_id", benchIds);
-      tagsMap = (tagRows ?? []).reduce(
-        (acc: Record<string, string[]>, row: { bench_id: string; tag: string }) => {
-          if (!acc[row.bench_id]) acc[row.bench_id] = [];
-          acc[row.bench_id].push(row.tag);
-          return acc;
-        },
-        {}
-      );
-    }
-
-    const benches: Bench[] = (rows ?? []).map((r: Record<string, unknown>) =>
-      toBench(r, tagsMap[String(r.id)] ?? [])
-    );
-    return jsonData(benches);
+    const benches: Bench[] = (rows ?? []).map((r: Record<string, unknown>) => toBench(r));
+    return jsonCachedData(benches, 30, 120);
   } catch (err) {
     console.error("benches/nearby error:", err);
     return jsonError("Unable to load benches", "internal_error", 500);

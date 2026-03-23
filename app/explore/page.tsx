@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createBench, getProfile, listNearbyBenches, updateBenchLocation } from "@/src/lib/api";
-import type { Bench } from "@/src/lib/types";
+import { createBench, getProfile, listBenchPins, updateBenchLocation } from "@/src/lib/api";
+import type { BenchPin } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
-import { ExploreMap } from "@/src/components/explore-map";
+import { ExploreMap, type ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 
@@ -53,7 +53,8 @@ const BENCH_TYPE_LABELS: Record<string, string> = {
 
 export default function ExplorePage() {
   const { isAdmin, profileId } = useAuth();
-  const [benches, setBenches] = useState<Bench[]>([]);
+  const pinCacheRef = useRef<Map<string, BenchPin>>(new Map());
+  const [benches, setBenches] = useState<BenchPin[]>([]);
   const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
@@ -72,39 +73,55 @@ export default function ExplorePage() {
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
+  const currentBoundsRef = useRef<ViewportBounds | null>(null);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
-  const refresh = useCallback(async (nextFilters: ExploreFilters) => {
-    setLoading(true);
+  const applyFilters = useCallback((cache: Map<string, BenchPin>, f: ExploreFilters): BenchPin[] => {
+    let arr = Array.from(cache.values());
+    if (f.minRating) arr = arr.filter((b) => b.averageRating >= f.minRating!);
+    if (f.types && f.types.length > 0) arr = arr.filter((b) => f.types!.includes(b.type));
+    return arr;
+  }, []);
+
+  const refresh = useCallback(async (bounds: ViewportBounds) => {
     setError(null);
     try {
-      const data = await listNearbyBenches({
-        lat: 47.6798,
-        lng: -122.3288,
-        minRating: nextFilters.minRating,
-        radiusMeters: 3000
-      });
-      const filtered = nextFilters.types && nextFilters.types.length > 0
-        ? data.filter((b) => nextFilters.types!.includes(b.type))
-        : data;
+      const data = await listBenchPins(bounds, filtersRef.current.minRating);
+      const cache = pinCacheRef.current;
+      for (const pin of data) {
+        cache.set(pin.id, pin);
+      }
+      const filtered = applyFilters(cache, filtersRef.current);
       setBenches(filtered);
+      setLoading(false);
       setSelectedBenchID((prev) => {
         if (prev && filtered.some((b) => b.id === prev)) return prev;
         return filtered.length > 0 ? filtered[0].id : null;
       });
       trackEvent({
         name: "explore_loaded",
-        metadata: { count: filtered.length, types: nextFilters.types?.length ?? 0, hasMinRating: Boolean(nextFilters.minRating) }
+        metadata: { count: filtered.length, cached: cache.size }
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "unable to load benches");
-    } finally {
       setLoading(false);
     }
-  }, []);
+  }, [applyFilters]);
+
+  const handleBoundsChange = useCallback((bounds: ViewportBounds) => {
+    currentBoundsRef.current = bounds;
+    refresh(bounds).catch(() => {});
+  }, [refresh]);
 
   useEffect(() => {
-    refresh(filters).catch(() => {});
-  }, [filters, refresh]);
+    const filtered = applyFilters(pinCacheRef.current, filters);
+    setBenches(filtered);
+    setSelectedBenchID((prev) => {
+      if (prev && filtered.some((b) => b.id === prev)) return prev;
+      return filtered.length > 0 ? filtered[0].id : null;
+    });
+  }, [filters, applyFilters]);
 
   const toggleRating = useCallback((value: number) => {
     setFilters((prev) => {
@@ -149,7 +166,7 @@ export default function ExplorePage() {
   const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
 
-  const handleSelectFromMap = useCallback((bench: Bench) => {
+  const handleSelectFromMap = useCallback((bench: BenchPin) => {
     setSelectedBenchID(bench.id);
     flyToRef.current(bench.latitude, bench.longitude);
     setTimeout(() => {
@@ -157,7 +174,7 @@ export default function ExplorePage() {
     }, 100);
   }, []);
 
-  const handleSelectFromCard = useCallback((bench: Bench) => {
+  const handleSelectFromCard = useCallback((bench: BenchPin) => {
     setSelectedBenchID(bench.id);
     flyToRef.current(bench.latitude, bench.longitude);
   }, []);
@@ -205,7 +222,8 @@ export default function ExplorePage() {
       const updated = await updateBenchLocation(selectedBenchID, tempPlacement.lat, tempPlacement.lng);
       setAddStatus(`moved ${updated.name}`);
       trackEvent({ name: "bench_moved", benchId: selectedBenchID });
-      await refresh(filters);
+      pinCacheRef.current.delete(selectedBenchID);
+      if (currentBoundsRef.current) await refresh(currentBoundsRef.current);
       setTimeout(() => {
         setAddMode(false);
         setMoveMode(false);
@@ -215,7 +233,7 @@ export default function ExplorePage() {
     } catch (err) {
       setAddStatus(err instanceof Error ? err.message : "unable to move bench");
     }
-  }, [tempPlacement, selectedBenchID, refresh, filters]);
+  }, [tempPlacement, selectedBenchID, refresh]);
 
   const handleAddSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
@@ -237,7 +255,7 @@ export default function ExplorePage() {
         });
         setAddStatus(`created ${created.name}`);
         trackEvent({ name: "bench_created", benchId: created.id });
-        refresh(filters).catch(() => {});
+        if (currentBoundsRef.current) refresh(currentBoundsRef.current).catch(() => {});
         setTimeout(() => {
           handleCancelAdd();
           setAddStatus(null);
@@ -246,7 +264,7 @@ export default function ExplorePage() {
         setAddStatus(err instanceof Error ? err.message : "unable to add bench");
       }
     },
-    [tempPlacement, addName, addNeighborhood, addType, addDescription, filters, refresh, handleCancelAdd]
+    [tempPlacement, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd]
   );
 
   return (
@@ -268,6 +286,7 @@ export default function ExplorePage() {
           selectedBenchID={selectedBenchID}
           onSelectBench={handleSelectFromMap}
           onMapReady={handleMapReady}
+          onBoundsChange={handleBoundsChange}
           addMode={addMode || moveMode}
           tempPlacement={tempPlacement}
           onMapClick={handleMapClick}
@@ -560,7 +579,7 @@ export default function ExplorePage() {
               type="button"
               className="button-secondary"
               style={{ alignSelf: "flex-start", fontSize: 12 }}
-              onClick={() => refresh(filters)}
+              onClick={() => currentBoundsRef.current && refresh(currentBoundsRef.current)}
             >
               retry
             </button>
