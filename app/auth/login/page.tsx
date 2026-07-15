@@ -1,11 +1,14 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import Link from "next/link";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 
-export default function LoginPage() {
+function LoginForm() {
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -22,7 +25,7 @@ export default function LoginPage() {
         setStatus(error.message);
         return;
       }
-      window.location.href = "/";
+      window.location.href = next;
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -68,5 +71,13 @@ export default function LoginPage() {
       </p>
       {status ? <p style={{ color: "var(--danger)", marginTop: 12 }}>{status}</p> : null}
     </section>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }

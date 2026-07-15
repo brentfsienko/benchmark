@@ -506,9 +506,19 @@ export default function BenchDetailPage() {
               )}
             </div>
 
-            <button className="button-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
-              {submitting ? "submitting…" : "submit benchmark"}
-            </button>
+            {profileId ? (
+              <button className="button-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
+                {submitting ? "submitting…" : "submit benchmark"}
+              </button>
+            ) : (
+              <Link
+                href={`/auth/login?next=/bench/${benchID}`}
+                className="button-primary"
+                style={{ width: "100%", display: "block", textAlign: "center", textDecoration: "none" }}
+              >
+                sign in to submit a benchmark
+              </Link>
+            )}
           </form>
 
           {/* Community benchmarks */}
