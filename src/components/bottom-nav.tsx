@@ -57,6 +57,10 @@ export function BottomNav() {
   const pathname = usePathname();
   const { profileId, user } = useAuth();
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
+  const hideNav =
+    pathname === "/onboarding" ||
+    pathname?.startsWith("/auth") ||
+    pathname === "/";
   const visibleLinks = user ? links : links.filter((item) => item.href !== "/home");
 
   useEffect(() => {
@@ -68,6 +72,8 @@ export function BottomNav() {
       .then((res) => setPendingRequestCount(res.incoming.length))
       .catch(() => setPendingRequestCount(0));
   }, [profileId, user]);
+
+  if (hideNav) return null;
 
   return (
     <nav

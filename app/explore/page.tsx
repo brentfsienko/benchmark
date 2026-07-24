@@ -10,6 +10,8 @@ import { Toast } from "@/src/components/toast";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
+import { isOnboardingComplete } from "@/src/lib/onboarding";
+import { useRouter } from "next/navigation";
 
 const ExploreMap = dynamic(
   () => import("@/src/components/explore-map").then((m) => m.ExploreMap),
@@ -77,6 +79,7 @@ const BENCH_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ExplorePage() {
+  const router = useRouter();
   const { isAdmin, profileId, user } = useAuth();
   const pinCacheRef = useRef<Map<string, BenchPin>>(new Map());
   const [benches, setBenches] = useState<BenchPin[]>([]);
@@ -103,6 +106,12 @@ export default function ExplorePage() {
   const [toast, setToast] = useState<string | null>(null);
   const toastKey = useRef(0);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
+
+  useEffect(() => {
+    if (!isOnboardingComplete()) {
+      router.replace("/onboarding");
+    }
+  }, [router]);
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
   const currentBoundsRef = useRef<ViewportBounds | null>(null);

@@ -2,12 +2,11 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useRef, useState, type TouchEvent } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
 import { completeOnboarding } from "@/src/lib/api";
 import { trackEvent } from "@/src/lib/analytics";
-
-const ONBOARDING_KEY = "benchmark_onboarding_complete";
+import { markOnboardingComplete } from "@/src/lib/onboarding";
 
 type Slide =
   | {
@@ -49,23 +48,44 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { profileId } = useAuth();
   const [step, setStep] = useState(0);
+  const touchStartX = useRef<number | null>(null);
   const slide = slides[step];
 
-  const finish = (eventName: "onboarding_complete" | "onboarding_skipped") => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ONBOARDING_KEY, "true");
-    }
-    trackEvent({ name: eventName });
-    completeOnboarding(profileId ?? "user-1").catch(() => {});
-    router.replace("/explore");
-  };
+  const finish = useCallback(
+    (eventName: "onboarding_complete" | "onboarding_skipped") => {
+      markOnboardingComplete();
+      trackEvent({ name: eventName });
+      completeOnboarding(profileId ?? "user-1").catch(() => {});
+      router.replace("/explore");
+    },
+    [profileId, router]
+  );
 
-  const handleNext = () => {
+  const goNext = useCallback(() => {
     if (step < slides.length - 1) {
       setStep((s) => s + 1);
-    } else {
-      finish("onboarding_complete");
+      return;
     }
+    finish("onboarding_complete");
+  }, [finish, step]);
+
+  const goPrev = useCallback(() => {
+    if (step > 0) setStep((s) => s - 1);
+  }, [step]);
+
+  const onTouchStart = (e: TouchEvent) => {
+    touchStartX.current = e.changedTouches[0]?.clientX ?? null;
+  };
+
+  const onTouchEnd = (e: TouchEvent) => {
+    const start = touchStartX.current;
+    touchStartX.current = null;
+    if (start == null) return;
+    const end = e.changedTouches[0]?.clientX ?? start;
+    const delta = end - start;
+    if (Math.abs(delta) < 48) return;
+    if (delta < 0) goNext();
+    else goPrev();
   };
 
   return (
@@ -73,11 +93,14 @@ export default function OnboardingPage() {
       style={{
         position: "fixed",
         inset: 0,
+        zIndex: 60,
         background: "var(--page)",
         display: "flex",
         flexDirection: "column",
         padding: "max(env(safe-area-inset-top), 24px) 24px max(env(safe-area-inset-bottom), 24px)"
       }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       <button
         type="button"
@@ -148,7 +171,7 @@ export default function OnboardingPage() {
               fill
               sizes="280px"
               style={{ objectFit: "cover", objectPosition: "top center" }}
-              priority={step === 1}
+              priority
             />
           </div>
         )}
@@ -178,15 +201,22 @@ export default function OnboardingPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 8 }}>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 16 }}>
         {slides.map((_, i) => (
-          <div
+          <button
             key={i}
+            type="button"
+            aria-label={`Go to slide ${i + 1}`}
+            onClick={() => setStep(i)}
             style={{
-              width: 8,
+              width: i === step ? 18 : 8,
               height: 8,
               borderRadius: 4,
-              background: i === step ? "var(--accent)" : "var(--border)"
+              border: "none",
+              padding: 0,
+              background: i === step ? "var(--accent)" : "var(--border)",
+              cursor: "pointer",
+              transition: "width 0.2s ease, background 0.2s ease"
             }}
           />
         ))}
@@ -195,8 +225,8 @@ export default function OnboardingPage() {
       <button
         type="button"
         className="button-primary"
-        onClick={handleNext}
-        style={{ width: "100%", height: 48, fontSize: 16 }}
+        onClick={goNext}
+        style={{ width: "100%", height: 48, fontSize: 16, flexShrink: 0 }}
       >
         {step < slides.length - 1 ? "next" : "get started"}
       </button>
