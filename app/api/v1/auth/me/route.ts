@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/src/lib/supabase/server";
 import { createSupabaseAdmin, hasSupabase } from "@/src/lib/supabase/admin";
 import { jsonData, jsonError } from "@/src/lib/api-response";
-import { isAdminEmail, isAdminUsername } from "@/src/lib/admin";
+import { isAdminEmail } from "@/src/lib/admin";
 
 export async function GET() {
   const supabase = await createSupabaseServerClient();
@@ -9,7 +9,7 @@ export async function GET() {
 
   if (!user) {
     return jsonData({
-      profileId: process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1",
+      profileId: null,
       username: null,
       isAdmin: false,
       isAnonymous: true
@@ -27,7 +27,7 @@ export async function GET() {
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  const isAdmin = isAdminEmail(user.email) || isAdminUsername(profile?.username ?? null);
+  const isAdmin = isAdminEmail(user.email);
   return jsonData({
     profileId: profile?.id ?? null,
     username: profile?.username ?? null,

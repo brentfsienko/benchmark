@@ -1,5 +1,17 @@
+/** Server-trusted admin emails. Do not use username for admin. */
 export const ADMIN_EMAILS = ["brentfsienko@gmail.com"] as const;
-export const ADMIN_USERNAMES = ["brent"] as const;
+
+/** Usernames that must not be claimed (admin / brand / reserved). */
+export const RESERVED_USERNAMES = [
+  "brent",
+  "admin",
+  "administrator",
+  "benchmark",
+  "support",
+  "official",
+  "mod",
+  "moderator",
+] as const;
 
 export function isAdminEmail(email?: string | null): boolean {
   if (!email) return false;
@@ -7,8 +19,9 @@ export function isAdminEmail(email?: string | null): boolean {
   return ADMIN_EMAILS.includes(normalized as (typeof ADMIN_EMAILS)[number]);
 }
 
-export function isAdminUsername(username?: string | null): boolean {
+export function isReservedUsername(username?: string | null): boolean {
   if (!username) return false;
-  const normalized = username.trim().toLowerCase();
-  return ADMIN_USERNAMES.includes(normalized as (typeof ADMIN_USERNAMES)[number]);
+  return RESERVED_USERNAMES.includes(
+    username.trim().toLowerCase() as (typeof RESERVED_USERNAMES)[number]
+  );
 }

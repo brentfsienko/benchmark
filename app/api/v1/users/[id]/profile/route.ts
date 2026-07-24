@@ -1,3 +1,4 @@
+import { isReservedUsername } from "@/src/lib/admin";
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
@@ -109,6 +110,7 @@ export async function PATCH(
       const v = String(body.username).trim().toLowerCase();
       if (!/^[a-z0-9_]+$/.test(v)) return jsonError("Username: lowercase letters, numbers, underscores only", "validation_error", 422);
       if (v.length < 2) return jsonError("Username must be at least 2 characters", "validation_error", 422);
+      if (isReservedUsername(v)) return jsonError("Username is reserved", "validation_error", 422);
       updates.username = v;
     }
     if (body.isPublic !== undefined) updates.is_public_profile = Boolean(body.isPublic);

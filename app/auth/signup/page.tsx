@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import Link from "next/link";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
+import { isReservedUsername } from "@/src/lib/admin";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -18,13 +19,18 @@ export default function SignupPage() {
     setLoading(true);
     setStatus(null);
     try {
+      const cleanUsername = username.trim().toLowerCase();
+      if (isReservedUsername(cleanUsername)) {
+        setStatus("That username is reserved.");
+        return;
+      }
       const supabase = createSupabaseBrowser();
       const redirectTo = `${window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { display_name: displayName.trim(), username: username.trim().toLowerCase() },
+          data: { display_name: displayName.trim(), username: cleanUsername },
           emailRedirectTo: redirectTo
         }
       });

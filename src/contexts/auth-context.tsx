@@ -3,7 +3,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
-import { isAdminEmail } from "@/src/lib/admin";
 
 type AuthContextValue = {
   user: User | null;
@@ -31,12 +30,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch("/api/v1/auth/me");
       const json = await res.json();
-      const id = json?.data?.profileId ?? process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1";
+      const id = json?.data?.profileId ?? null;
       const nextIsAdmin = Boolean(json?.data?.isAdmin);
       setProfileId(id);
       setIsAdminFromServer(nextIsAdmin);
     } catch {
-      setProfileId(process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1");
+      setProfileId(null);
       setIsAdminFromServer(false);
     } finally {
       setLoading(false);
@@ -63,12 +62,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = createSupabaseBrowser();
     await supabase.auth.signOut();
     setUser(null);
-    setProfileId(process.env.NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID ?? "user-1");
+    setProfileId(null);
     setIsAdminFromServer(false);
     window.location.href = "/";
   }, []);
 
-  const isAdmin = isAdminFromServer || isAdminEmail(user?.email ?? null);
+  const isAdmin = isAdminFromServer;
 
   return (
     <AuthContext.Provider value={{ user, profileId, loading, isAdmin, signOut }}>
