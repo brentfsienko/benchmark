@@ -32,6 +32,7 @@ type BenchExploreSheetProps = {
   onReviewsUpdated?: (reviews: BenchReview[]) => void;
   /** Admin-only: permanently remove this bench. */
   onDelete?: (benchId: string) => Promise<void> | void;
+  onToast?: (message: string) => void;
 };
 
 type SheetMode = "overview" | "submit";
@@ -137,7 +138,8 @@ export function BenchExploreSheet({
   loading,
   onClose,
   onReviewsUpdated,
-  onDelete
+  onDelete,
+  onToast
 }: BenchExploreSheetProps) {
   const { profileId, isAdmin } = useAuth();
   const titleId = useId();
@@ -342,6 +344,7 @@ export function BenchExploreSheet({
       setMode("overview");
       setHeightVh(EXPANDED_VH);
       trackEvent({ name: "benchmark_submitted", userId: profileId, benchId: pin.id });
+      onToast?.("benchmark submitted! nice sit.");
     } catch (err) {
       if (err && typeof err === "object" && "code" in err) {
         const geoErr = err as GeolocationPositionError;

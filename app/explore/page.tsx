@@ -6,6 +6,7 @@ import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenc
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
+import { Toast } from "@/src/components/toast";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
@@ -99,6 +100,8 @@ export default function ExplorePage() {
   const [sheetPin, setSheetPin] = useState<BenchPin | null>(null);
   const [sheetLoading, setSheetLoading] = useState(false);
   const [carouselPad, setCarouselPad] = useState(48);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastKey = useRef(0);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
@@ -279,6 +282,11 @@ export default function ExplorePage() {
     setDetailVersion((v) => v + 1);
   }, [sheetBenchID]);
 
+  const showToast = useCallback((message: string) => {
+    toastKey.current += 1;
+    setToast(message);
+  }, []);
+
   const handleDeleteBench = useCallback(async (benchId: string) => {
     await deleteBench(benchId);
     pinCacheRef.current.delete(benchId);
@@ -287,10 +295,11 @@ export default function ExplorePage() {
     setSelectedBenchID((prev) => (prev === benchId ? null : prev));
     setBenchmarkedIDs((prev) => prev.filter((id) => id !== benchId));
     setDetailVersion((v) => v + 1);
+    showToast("bench deleted");
     if (currentBoundsRef.current) {
       await refresh(currentBoundsRef.current);
     }
-  }, [refresh]);
+  }, [refresh, showToast]);
 
   useEffect(() => {
     const el = carouselRef.current;
@@ -467,18 +476,15 @@ export default function ExplorePage() {
           popularityScore: 0,
           tags: ["user-submitted"]
         });
-        setAddStatus(`created ${created.name}`);
         trackEvent({ name: "bench_created", benchId: created.id });
         if (currentBoundsRef.current) refresh(currentBoundsRef.current).catch(() => {});
-        setTimeout(() => {
-          handleCancelAdd();
-          setAddStatus(null);
-        }, 1500);
+        handleCancelAdd();
+        showToast("bench submitted");
       } catch (err) {
         setAddStatus(err instanceof Error ? err.message : "unable to add bench");
       }
     },
-    [tempPlacement, isAdmin, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd]
+    [tempPlacement, isAdmin, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd, showToast]
   );
 
   return (
@@ -995,8 +1001,10 @@ export default function ExplorePage() {
           onClose={closeBenchSheet}
           onReviewsUpdated={handleSheetReviewsUpdated}
           onDelete={isAdmin ? handleDeleteBench : undefined}
+          onToast={showToast}
         />
       )}
+      {toast && <Toast key={toastKey.current} message={toast} onDone={() => setToast(null)} />}
     </div>
   );
 }
