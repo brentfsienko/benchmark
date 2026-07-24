@@ -648,9 +648,6 @@ export default function BenchDetailPage() {
                     add photo
                     <input type="file" accept="image/*" multiple onChange={onPhotosSelected} style={{ display: "none" }} />
                   </label>
-                  <p className="muted" style={{ margin: "6px 0 0", fontSize: 11 }}>
-                    iPhone photos are auto-optimized before upload.
-                  </p>
                 </>
               )}
             </div>
