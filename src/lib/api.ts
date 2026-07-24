@@ -138,7 +138,14 @@ export function updateBenchLocation(benchID: string, latitude: number, longitude
 
 export async function submitBenchmark(
   benchID: string,
-  payload: { rating: number; body: string; photoBase64Items?: string[]; userId?: string }
+  payload: {
+    rating: number;
+    body: string;
+    photoBase64Items?: string[];
+    userId?: string;
+    latitude: number;
+    longitude: number;
+  }
 ): Promise<void> {
   const userId = payload.userId ?? env.currentUserID;
   await request<unknown>(`/benches/${benchID}/reviews`, {
@@ -147,7 +154,9 @@ export async function submitBenchmark(
       userId,
       rating: payload.rating,
       body: payload.body,
-      photoBase64Items: payload.photoBase64Items ?? []
+      photoBase64Items: payload.photoBase64Items ?? [],
+      latitude: payload.latitude,
+      longitude: payload.longitude
     })
   });
 }
