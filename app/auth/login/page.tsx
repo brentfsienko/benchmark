@@ -1,14 +1,18 @@
 "use client";
 
-import { FormEvent, Suspense, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import Link from "next/link";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
+import { safeRedirectPath } from "@/src/lib/safe-redirect";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
+  const next = useMemo(
+    () => safeRedirectPath(searchParams.get("next"), "/"),
+    [searchParams]
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<string | null>(null);

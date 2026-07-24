@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
-import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
+import {
+  canViewUserPrivateData,
+  getRequestActor,
+  requireSelfOrAdmin,
+} from "@/src/lib/request-auth";
 
 export async function GET(
   _request: NextRequest,
@@ -12,7 +16,23 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    const actor = await getRequestActor();
     const supabase = createSupabaseServer();
+
+    const { data: user } = await supabase
+      .from("users")
+      .select("id, is_public_profile")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!user) return jsonError("User not found", "user_not_found", 404);
+
+    const allowed = await canViewUserPrivateData(
+      actor,
+      id,
+      Boolean(user.is_public_profile ?? true)
+    );
+    if (!allowed) return jsonError("Forbidden", "forbidden", 403);
 
     const { data, error } = await supabase
       .from("wishlist_items")
@@ -22,7 +42,7 @@ export async function GET(
 
     if (error) return jsonError("Unable to load wishlist", "internal_error", 500);
     return jsonData((data ?? []).map((r: { bench_id: string }) => r.bench_id));
-  } catch (err) {
+  } catch {
     return jsonError("Unable to load wishlist", "internal_error", 500);
   }
 }
@@ -52,7 +72,7 @@ export async function POST(
 
     if (error) return jsonError("Unable to add wishlist item", "internal_error", 500);
     return jsonData({ benchId }, 201);
-  } catch (err) {
+  } catch {
     return jsonError("Invalid payload", "invalid_payload", 400);
   }
 }

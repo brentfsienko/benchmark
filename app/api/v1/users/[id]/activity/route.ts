@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
-import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
+import {
+  canViewUserPrivateData,
+  getRequestActor,
+  requireSelfOrAdmin,
+} from "@/src/lib/request-auth";
 import type { ActivityItem } from "@/src/lib/types";
 
 export async function GET(
@@ -14,11 +18,18 @@ export async function GET(
   try {
     const { id } = await params;
     const feed = request.nextUrl.searchParams.get("feed") === "true";
+    const actor = await getRequestActor();
     const supabase = createSupabaseServer();
+
+    const { data: targetUser } = await supabase
+      .from("users")
+      .select("id, is_public_profile")
+      .eq("id", id)
+      .maybeSingle();
+    if (!targetUser) return jsonError("User not found", "user_not_found", 404);
 
     let feedUserIds = [id];
     if (feed) {
-      const actor = await getRequestActor();
       if (!actor?.profileId) return jsonError("Authentication required", "unauthorized", 401);
       if (!requireSelfOrAdmin(actor, id)) return jsonError("Forbidden", "forbidden", 403);
       const { data: followingRows, error: followingErr } = await supabase
@@ -28,7 +39,17 @@ export async function GET(
       if (followingErr) {
         return jsonError("Unable to load feed connections", "internal_error", 500);
       }
-      feedUserIds = [id, ...((followingRows ?? []).map((r: { following_id: string }) => r.following_id))];
+      feedUserIds = [
+        id,
+        ...((followingRows ?? []).map((r: { following_id: string }) => r.following_id)),
+      ];
+    } else {
+      const allowed = await canViewUserPrivateData(
+        actor,
+        id,
+        Boolean(targetUser.is_public_profile ?? true)
+      );
+      if (!allowed) return jsonError("Forbidden", "forbidden", 403);
     }
 
     const { data: reviewRows, error } = await supabase
@@ -75,11 +96,11 @@ export async function GET(
       benchId: String(r.bench_id),
       benchName: benchNames[String(r.bench_id)] ?? "",
       rating: Number(r.rating),
-      createdAt: new Date(String(r.created_at)).toISOString()
+      createdAt: new Date(String(r.created_at)).toISOString(),
     }));
 
     return jsonData(items);
-  } catch (err) {
+  } catch {
     return jsonError("Unable to load activity", "internal_error", 500);
   }
 }
