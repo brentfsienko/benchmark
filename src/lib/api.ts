@@ -140,6 +140,12 @@ export function updateBenchLocation(benchID: string, latitude: number, longitude
   });
 }
 
+export function deleteBench(benchID: string): Promise<{ id: string; name: string; deleted: boolean }> {
+  return request<{ id: string; name: string; deleted: boolean }>(`/benches/${benchID}`, {
+    method: "DELETE"
+  });
+}
+
 export async function submitBenchmark(
   benchID: string,
   payload: {

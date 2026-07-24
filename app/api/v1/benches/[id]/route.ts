@@ -117,3 +117,45 @@ export async function PATCH(
     return jsonError("Invalid payload", "invalid_payload", 400);
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  if (!hasSupabase()) {
+    return jsonError("Database not configured", "internal_error", 503);
+  }
+  if (!(await isRequestAdmin())) {
+    return jsonError("Admin access required", "forbidden", 403);
+  }
+  try {
+    const { id } = await params;
+    const supabase = createSupabaseServer();
+
+    const { data: existing, error: lookupErr } = await supabase
+      .from("benches")
+      .select("id, name")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (lookupErr) {
+      console.error("benches/[id] DELETE lookup error:", lookupErr);
+      return jsonError("Unable to delete bench", "internal_error", 500);
+    }
+    if (!existing) {
+      return jsonError("Bench not found", "bench_not_found", 404);
+    }
+
+    // Related tags/visits/reviews/wishlist rows cascade via FK.
+    const { error } = await supabase.from("benches").delete().eq("id", id);
+    if (error) {
+      console.error("benches/[id] DELETE error:", error);
+      return jsonError("Unable to delete bench", "internal_error", 500);
+    }
+
+    return jsonData({ id, name: existing.name, deleted: true });
+  } catch (err) {
+    console.error("benches/[id] DELETE error:", err);
+    return jsonError("Unable to delete bench", "internal_error", 500);
+  }
+}

@@ -30,6 +30,8 @@ type BenchExploreSheetProps = {
   loading: boolean;
   onClose: () => void;
   onReviewsUpdated?: (reviews: BenchReview[]) => void;
+  /** Admin-only: permanently remove this bench. */
+  onDelete?: (benchId: string) => Promise<void> | void;
 };
 
 type SheetMode = "overview" | "submit";
@@ -90,6 +92,17 @@ function ChevronIcon({ expanded }: { expanded: boolean }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1={10} y1={11} x2={10} y2={17} />
+      <line x1={14} y1={11} x2={14} y2={17} />
+    </svg>
+  );
+}
+
 function readCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -123,9 +136,10 @@ export function BenchExploreSheet({
   reviews,
   loading,
   onClose,
-  onReviewsUpdated
+  onReviewsUpdated,
+  onDelete
 }: BenchExploreSheetProps) {
-  const { profileId } = useAuth();
+  const { profileId, isAdmin } = useAuth();
   const titleId = useId();
   const name = bench?.name ?? pin.name;
   const neighborhood = bench?.neighborhood ?? pin.neighborhood;
@@ -149,6 +163,7 @@ export function BenchExploreSheet({
   const [proximity, setProximity] = useState<ProximityState>({ status: "idle" });
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(() => new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const toggleReviewExpanded = useCallback((reviewId: string) => {
     setExpandedReviewIds((prev) => {
@@ -359,6 +374,24 @@ export function BenchExploreSheet({
     onClose();
   };
 
+  const handleDelete = async () => {
+    if (!onDelete || !isAdmin || deleting) return;
+    const ok = window.confirm(
+      `Delete “${name}”? This permanently removes the bench and its benchmarks.`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setStatus(null);
+    try {
+      await onDelete(pin.id);
+      trackEvent({ name: "bench_deleted", benchId: pin.id, userId: profileId ?? undefined });
+      onClose();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "unable to delete bench");
+      setDeleting(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -472,7 +505,37 @@ export function BenchExploreSheet({
                   : `${neighborhood} • ${type}`}
               </p>
             </div>
+            {isAdmin && onDelete && mode === "overview" ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void handleDelete();
+                }}
+                disabled={deleting}
+                aria-label="Delete bench"
+                title="Delete bench"
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  display: "grid",
+                  placeItems: "center",
+                  border: "1px solid var(--border)",
+                  background: "var(--elevated)",
+                  color: "var(--danger)",
+                  cursor: deleting ? "wait" : "pointer",
+                  flexShrink: 0,
+                  opacity: deleting ? 0.6 : 1
+                }}
+              >
+                <TrashIcon />
+              </button>
+            ) : null}
           </div>
+          {status && mode === "overview" ? (
+            <p style={{ margin: "8px 0 0", color: "var(--danger)", fontSize: 12 }}>{status}</p>
+          ) : null}
         </div>
 
         <div
