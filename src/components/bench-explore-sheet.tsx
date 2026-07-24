@@ -499,11 +499,9 @@ export function BenchExploreSheet({
               >
                 {mode === "submit" ? "submit benchmark" : name}
               </h2>
-              <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
-                {mode === "submit"
-                  ? name
-                  : `${neighborhood} • ${type}`}
-              </p>
+              {mode === "submit" ? (
+                <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>{name}</p>
+              ) : null}
             </div>
             {isAdmin && onDelete && mode === "overview" ? (
               <button
@@ -554,7 +552,8 @@ export function BenchExploreSheet({
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 14,
+                  justifyContent: "space-between",
+                  gap: 12,
                   marginBottom: 14,
                   padding: "12px 14px",
                   borderRadius: "var(--radius)",
@@ -563,17 +562,19 @@ export function BenchExploreSheet({
                 }}
               >
                 <div>
-                  <p style={{ margin: 0, fontSize: 28, fontWeight: 700, lineHeight: 1, color: "var(--accent)" }}>
-                    {rating.toFixed(1)}
-                  </p>
-                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 11 }}>avg rating</p>
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>
-                    {rating.toFixed(1)} ★ · {reviewCount} benchmark{reviewCount === 1 ? "" : "s"}
+                  <p style={{ margin: 0, fontSize: 26, fontWeight: 700, lineHeight: 1, color: "var(--accent)" }}>
+                    {rating.toFixed(1)} ★
                   </p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
                     {neighborhood} · {type}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <p style={{ margin: 0, fontSize: 18, fontWeight: 700, lineHeight: 1.1 }}>
+                    {reviewCount}
+                  </p>
+                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
+                    benchmark{reviewCount === 1 ? "" : "s"}
                   </p>
                 </div>
               </div>
