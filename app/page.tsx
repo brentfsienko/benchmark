@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-
-const ONBOARDING_KEY = "benchmark_onboarding_complete";
+import { isOnboardingComplete } from "@/src/lib/onboarding";
 
 export default function RootPage() {
   const router = useRouter();
@@ -14,9 +13,8 @@ export default function RootPage() {
   }, []);
 
   useEffect(() => {
-    if (!mounted || typeof window === "undefined") return;
-    const done = localStorage.getItem(ONBOARDING_KEY);
-    router.replace(done ? "/explore" : "/onboarding");
+    if (!mounted) return;
+    router.replace(isOnboardingComplete() ? "/explore" : "/onboarding");
   }, [mounted, router]);
 
   return (
