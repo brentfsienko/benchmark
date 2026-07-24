@@ -20,6 +20,7 @@ export type BenchPin = {
   neighborhood: string;
   type: string;
   averageRating: number;
+  reviewCount: number;
   latitude: number;
   longitude: number;
 };
