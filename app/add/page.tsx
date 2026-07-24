@@ -61,19 +61,6 @@ export default function AddBenchPage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <section className="screen">
-        <SectionHeader title="add a bench" subtitle="bench creation is currently limited" />
-        <div className="surface-card" style={{ padding: 20 }}>
-          <p className="muted" style={{ margin: 0 }}>
-            bench creation is currently available to select accounts only. check back soon!
-          </p>
-        </div>
-      </section>
-    );
-  }
-
   const onFormSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!finalNeighborhood) {
@@ -85,6 +72,7 @@ export default function AddBenchPage() {
   };
 
   const onConfirm = async () => {
+    if (!isAdmin) return;
     setSubmitting(true);
     try {
       const created = await createBench({
@@ -192,8 +180,9 @@ export default function AddBenchPage() {
               type="button"
               className="button-primary"
               style={{ flex: 1, height: 48 }}
-              disabled={submitting}
+              disabled={submitting || !isAdmin}
               onClick={onConfirm}
+              title={isAdmin ? undefined : "bench creation is currently limited"}
             >
               {submitting ? "adding…" : "confirm & add bench"}
             </button>
@@ -207,6 +196,11 @@ export default function AddBenchPage() {
               back
             </button>
           </div>
+          {!isAdmin ? (
+            <p className="muted" style={{ margin: "12px 0 0", fontSize: 13 }}>
+              bench creation is currently limited — you can review the flow, but adding is invite-only for now.
+            </p>
+          ) : null}
         </div>
         {status ? <p style={{ color: "var(--danger)", marginTop: 12 }}>{status}</p> : null}
       </section>

@@ -52,7 +52,7 @@ const BENCH_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ExplorePage() {
-  const { isAdmin, profileId } = useAuth();
+  const { isAdmin, profileId, user } = useAuth();
   const pinCacheRef = useRef<Map<string, BenchPin>>(new Map());
   const [benches, setBenches] = useState<BenchPin[]>([]);
   const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
@@ -238,7 +238,7 @@ export default function ExplorePage() {
   const handleAddSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!tempPlacement) return;
+      if (!tempPlacement || !isAdmin) return;
       try {
         const created = await createBench({
           name: addName,
@@ -264,7 +264,7 @@ export default function ExplorePage() {
         setAddStatus(err instanceof Error ? err.message : "unable to add bench");
       }
     },
-    [tempPlacement, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd]
+    [tempPlacement, isAdmin, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd]
   );
 
   return (
@@ -412,30 +412,32 @@ export default function ExplorePage() {
         }}
       >
         {!addMode && !moveMode ? (
-          isAdmin && (
+          user && (
             <>
-              <button
-                type="button"
-                onClick={handleMoveClick}
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  background: "var(--surface)",
-                  border: "2px solid var(--border)",
-                  color: "var(--text-primary)",
-                  cursor: selectedBench ? "pointer" : "not-allowed",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                  opacity: selectedBench ? 1 : 0.5
-                }}
-                disabled={!selectedBench}
-                aria-label="Move selected bench"
-                title={selectedBench ? "Move selected bench pin" : "Select a bench first"}
-              >
-                <MoveIcon />
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleMoveClick}
+                  style={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    background: "var(--surface)",
+                    border: "2px solid var(--border)",
+                    color: "var(--text-primary)",
+                    cursor: selectedBench ? "pointer" : "not-allowed",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    opacity: selectedBench ? 1 : 0.5
+                  }}
+                  disabled={!selectedBench}
+                  aria-label="Move selected bench"
+                  title={selectedBench ? "Move selected bench pin" : "Select a bench first"}
+                >
+                  <MoveIcon />
+                </button>
+              )}
               <button
                 type="button"
                 className="button-primary"
@@ -720,9 +722,19 @@ export default function ExplorePage() {
                   style={{ width: "100%", marginTop: 4 }}
                 />
               </label>
-              <button type="submit" className="button-primary">
+              <button
+                type="submit"
+                className="button-primary"
+                disabled={!isAdmin}
+                title={isAdmin ? undefined : "bench creation is currently limited"}
+              >
                 confirm bench
               </button>
+              {!isAdmin ? (
+                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+                  bench creation is currently limited — you can try the flow, but adding is invite-only for now.
+                </p>
+              ) : null}
             </form>
             {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
           </div>
