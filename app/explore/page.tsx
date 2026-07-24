@@ -589,15 +589,16 @@ export default function ExplorePage() {
         )}
       </header>
 
-      {/* Map floating controls */}
+      {/* Map floating controls — vertical stack above the carousel */}
       <div
         style={{
           position: "absolute",
           right: 16,
-          bottom: 120,
+          bottom: 220,
           zIndex: 3,
           display: "flex",
-          gap: 8,
+          flexDirection: "column",
+          gap: 10,
           alignItems: "center"
         }}
       >
