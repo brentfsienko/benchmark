@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, updateBenchLocation } from "@/src/lib/api";
+import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenchReviews, updateBenchLocation } from "@/src/lib/api";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
@@ -278,6 +278,19 @@ export default function ExplorePage() {
     detailCacheRef.current.set(sheetBenchID, { ...prev, reviews: next, fetchedWithPhotos: true });
     setDetailVersion((v) => v + 1);
   }, [sheetBenchID]);
+
+  const handleDeleteBench = useCallback(async (benchId: string) => {
+    await deleteBench(benchId);
+    pinCacheRef.current.delete(benchId);
+    detailCacheRef.current.delete(benchId);
+    setBenches((prev) => prev.filter((b) => b.id !== benchId));
+    setSelectedBenchID((prev) => (prev === benchId ? null : prev));
+    setBenchmarkedIDs((prev) => prev.filter((id) => id !== benchId));
+    setDetailVersion((v) => v + 1);
+    if (currentBoundsRef.current) {
+      await refresh(currentBoundsRef.current);
+    }
+  }, [refresh]);
 
   useEffect(() => {
     const el = carouselRef.current;
@@ -981,6 +994,7 @@ export default function ExplorePage() {
           loading={sheetLoading && !sheetCached?.fetchedWithPhotos}
           onClose={closeBenchSheet}
           onReviewsUpdated={handleSheetReviewsUpdated}
+          onDelete={isAdmin ? handleDeleteBench : undefined}
         />
       )}
     </div>
