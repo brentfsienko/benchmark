@@ -1,5 +1,8 @@
 /** Server-trusted admin emails. Do not use username for admin. */
-export const ADMIN_EMAILS = ["brentfsienko@gmail.com"] as const;
+export const ADMIN_EMAILS = [
+  "brentfsienko@gmail.com",
+  "walker.c.sutton@gmail.com",
+] as const;
 
 /** Usernames that must not be claimed (admin / brand / reserved). */
 export const RESERVED_USERNAMES = [
