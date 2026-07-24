@@ -67,7 +67,7 @@ export function BottomNav() {
     listFollowRequests(profileId)
       .then((res) => setPendingRequestCount(res.incoming.length))
       .catch(() => setPendingRequestCount(0));
-  }, [profileId, user, pathname]);
+  }, [profileId, user]);
 
   return (
     <nav

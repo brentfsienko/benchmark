@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Map, Marker } from "leaflet";
+import "leaflet/dist/leaflet.css";
 import type { BenchPin } from "@/src/lib/types";
 import { FogOverlay } from "./fog-overlay";
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Map, Marker } from "leaflet";
+import "leaflet/dist/leaflet.css";
 
 type MiniBenchMapProps = {
   latitude: number;

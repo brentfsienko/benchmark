@@ -1,13 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createBench, getProfile, listBenchPins, updateBenchLocation } from "@/src/lib/api";
 import type { BenchPin } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
-import { ExploreMap, type ViewportBounds } from "@/src/components/explore-map";
+import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
+
+const ExploreMap = dynamic(
+  () => import("@/src/components/explore-map").then((m) => m.ExploreMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>loading map…</p>
+      </div>
+    )
+  }
+);
 
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -151,7 +164,7 @@ export default function ExplorePage() {
 
   useEffect(() => {
     if (profileId) {
-      getProfile(profileId)
+      getProfile(profileId, { slim: true })
         .then((p) => setBenchmarkedIDs(p.benchmarkedBenchIDs))
         .catch(() => {});
     }

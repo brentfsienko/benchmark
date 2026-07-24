@@ -41,7 +41,7 @@ async function loadBenchmarkedAndWishlist(supabase: ReturnType<typeof createSupa
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasSupabase()) {
@@ -49,14 +49,23 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    const slim = request.nextUrl.searchParams.get("slim") === "1";
     const actor = await getRequestActor();
     const supabase = createSupabaseServer();
 
-    const { data: user, error } = await supabase
-      .from("users")
-      .select("id, display_name, username, bio, is_public_profile, avatar_symbol, avatar_photo_url, avatar_photo_base64")
-      .eq("id", id)
-      .single();
+    const userQuery = slim
+      ? supabase
+          .from("users")
+          .select("id, display_name, username, bio, is_public_profile, avatar_symbol, avatar_photo_url")
+          .eq("id", id)
+          .single()
+      : supabase
+          .from("users")
+          .select("id, display_name, username, bio, is_public_profile, avatar_symbol, avatar_photo_url, avatar_photo_base64")
+          .eq("id", id)
+          .single();
+
+    const { data: user, error } = await userQuery;
 
     if (error || !user) {
       return jsonError("User not found", "user_not_found", 404);
@@ -70,9 +79,9 @@ export async function GET(
 
     const { benchmarked, wishlist, benchmarkCount } = await loadBenchmarkedAndWishlist(supabase, id);
     return jsonData(
-      buildProfile(user, benchmarked, wishlist, benchmarkCount, {
+      buildProfile(user as Record<string, unknown>, benchmarked, wishlist, benchmarkCount, {
         includePrivateFields: viewerIsSelfOrAdmin,
-        includeAvatarBase64: viewerIsSelfOrAdmin
+        includeAvatarBase64: viewerIsSelfOrAdmin && !slim
       })
     );
   } catch (err) {
