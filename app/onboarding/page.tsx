@@ -33,14 +33,12 @@ const slides: Slide[] = [
     body: "pan around your neighborhood, browse nearby pins, and swipe the carousel to preview benches before you go.",
     visual: "screenshot",
     src: "/onboarding/search.jpg",
-    alt: "map explore screen with bench pins and carousel"
+    alt: "explore map with bench pins and carousel cards"
   },
   {
-    title: "add a bench",
-    body: "found a seat that isn't on the map? drop a pin, name it, and share it with the community.",
-    visual: "screenshot",
-    src: "/onboarding/add.jpg",
-    alt: "add bench form over the map"
+    title: "leave a benchmark",
+    body: "when you sit down, rate the bench, add a note or photo, and help the community find the best seats.",
+    visual: "icon"
   }
 ];
 
