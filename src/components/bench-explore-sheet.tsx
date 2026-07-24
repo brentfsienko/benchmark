@@ -69,6 +69,27 @@ function BackIcon() {
   );
 }
 
+function ChevronIcon({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      width={16}
+      height={16}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{
+        transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+        transition: "transform 0.15s ease"
+      }}
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
 function readCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -127,6 +148,16 @@ export function BenchExploreSheet({
   const [status, setStatus] = useState<string | null>(null);
   const [proximity, setProximity] = useState<ProximityState>({ status: "idle" });
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(() => new Set());
+
+  const toggleReviewExpanded = useCallback((reviewId: string) => {
+    setExpandedReviewIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(reviewId)) next.delete(reviewId);
+      else next.add(reviewId);
+      return next;
+    });
+  }, []);
 
   const previewPhotos = useMemo(() => {
     const out: { src: string; author: string }[] = [];
@@ -554,46 +585,117 @@ export function BenchExploreSheet({
                 <p className="muted" style={{ margin: 0, fontSize: 13 }}>no benchmarks yet — be the first!</p>
               ) : (
                 <div style={{ display: "grid", gap: 8 }}>
-                  {reviews.map((review) => (
-                    <article
-                      key={review.id}
-                      style={{
-                        padding: 12,
-                        borderRadius: "var(--radius)",
-                        border: "1px solid var(--border)",
-                        background: "var(--elevated)"
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13 }}>{review.author}</span>
-                        <span style={{ fontSize: 12, fontWeight: 600 }}>{review.rating.toFixed(1)} ★</span>
-                      </div>
-                      {review.body ? (
-                        <p style={{ margin: "6px 0 0", fontSize: 13, lineHeight: 1.4 }}>{review.body}</p>
-                      ) : null}
-                      {(review.photoBase64Items ?? []).length > 0 ? (
-                        <div style={{ display: "flex", gap: 6, marginTop: 8, overflowX: "auto" }}>
-                          {(review.photoBase64Items ?? []).slice(0, 3).map((src, i) => (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => setSelectedPhoto(src)}
-                              style={{ border: "none", padding: 0, background: "none", cursor: "pointer", flexShrink: 0 }}
+                  {reviews.map((review) => {
+                    const expanded = expandedReviewIds.has(review.id);
+                    const photoCount = (review.photoBase64Items ?? []).length;
+                    const hasExtra = Boolean(review.body) || photoCount > 0;
+                    return (
+                      <article
+                        key={review.id}
+                        style={{
+                          padding: 12,
+                          borderRadius: "var(--radius)",
+                          border: "1px solid var(--border)",
+                          background: "var(--elevated)"
+                        }}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => hasExtra && toggleReviewExpanded(review.id)}
+                          aria-expanded={expanded}
+                          disabled={!hasExtra}
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            width: "100%",
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            cursor: hasExtra ? "pointer" : "default",
+                            fontFamily: "inherit",
+                            color: "inherit",
+                            textAlign: "left"
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                              <span style={{ fontWeight: 600, fontSize: 13 }}>{review.author}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                                {review.rating.toFixed(1)} ★
+                              </span>
+                            </div>
+                            {!expanded && review.body ? (
+                              <p
+                                style={{
+                                  margin: "6px 0 0",
+                                  fontSize: 13,
+                                  lineHeight: 1.4,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap"
+                                }}
+                              >
+                                {review.body}
+                              </p>
+                            ) : null}
+                            {!expanded && !review.body && photoCount > 0 ? (
+                              <p className="muted" style={{ margin: "6px 0 0", fontSize: 12 }}>
+                                {photoCount} photo{photoCount === 1 ? "" : "s"}
+                              </p>
+                            ) : null}
+                            <p className="muted" style={{ margin: "6px 0 0", fontSize: 11 }}>
+                              {new Date(review.createdAt).toLocaleDateString()}
+                              {!expanded && photoCount > 0 && review.body
+                                ? ` · ${photoCount} photo${photoCount === 1 ? "" : "s"}`
+                                : ""}
+                            </p>
+                          </div>
+                          {hasExtra ? (
+                            <span
+                              aria-hidden
+                              style={{
+                                flexShrink: 0,
+                                marginTop: 2,
+                                color: "var(--text-secondary)",
+                                display: "grid",
+                                placeItems: "center"
+                              }}
                             >
-                              <img
-                                src={src}
-                                alt={`Photo by ${review.author}`}
-                                style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8 }}
-                              />
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                      <p className="muted" style={{ margin: "6px 0 0", fontSize: 11 }}>
-                        {new Date(review.createdAt).toLocaleDateString()}
-                      </p>
-                    </article>
-                  ))}
+                              <ChevronIcon expanded={expanded} />
+                            </span>
+                          ) : null}
+                        </button>
+
+                        {expanded ? (
+                          <div style={{ marginTop: 8 }}>
+                            {review.body ? (
+                              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.45 }}>{review.body}</p>
+                            ) : null}
+                            {photoCount > 0 ? (
+                              <div style={{ display: "flex", gap: 6, marginTop: review.body ? 10 : 0, overflowX: "auto" }}>
+                                {(review.photoBase64Items ?? []).map((src, i) => (
+                                  <button
+                                    key={i}
+                                    type="button"
+                                    onClick={() => setSelectedPhoto(src)}
+                                    style={{ border: "none", padding: 0, background: "none", cursor: "pointer", flexShrink: 0 }}
+                                  >
+                                    <img
+                                      src={src}
+                                      alt={`Photo by ${review.author}`}
+                                      style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8 }}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
               )}
             </>
