@@ -26,7 +26,14 @@ function LoginForm() {
       const supabase = createSupabaseBrowser();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        setStatus(error.message);
+        const msg = error.message.toLowerCase();
+        if (msg.includes("email not confirmed") || msg.includes("confirm")) {
+          setStatus(
+            "verify your email first — check your inbox for the confirmation link, then try again."
+          );
+        } else {
+          setStatus(error.message);
+        }
         return;
       }
       window.location.href = next;
