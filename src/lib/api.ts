@@ -91,7 +91,7 @@ export async function listBenchPins(bounds: BenchPinBounds, minRating?: number):
   if (minRating !== undefined && minRating !== null) {
     params.set("minRating", String(minRating));
   }
-  return request<BenchPin[]>(`/benches/pins?${params.toString()}`);
+  return request<BenchPin[]>(`/benches/pins?${params.toString()}`, { cache: "no-store" });
 }
 
 export function getBench(benchID: string): Promise<Bench> {

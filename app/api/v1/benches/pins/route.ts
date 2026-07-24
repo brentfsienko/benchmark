@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { jsonCachedData, jsonError } from "@/src/lib/api-response";
+import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { BenchPin } from "@/src/lib/types";
 
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       return jsonError("Unable to load bench pins", "internal_error", 500);
     }
 
-    let pins: BenchPin[] = (rows ?? []).map((r: Record<string, unknown>) => toPin(r));
+    const pins: BenchPin[] = (rows ?? []).map((r: Record<string, unknown>) => toPin(r));
 
     // Fallback if RPC hasn't been migrated to include review_count yet.
     const needsCounts = pins.length > 0 && !(rows?.[0] && "review_count" in (rows[0] as object));
@@ -61,10 +61,14 @@ export async function GET(request: NextRequest) {
         const bid = String((row as { bench_id: string }).bench_id);
         countMap[bid] = (countMap[bid] ?? 0) + 1;
       }
-      pins = pins.map((p) => ({ ...p, reviewCount: countMap[p.id] ?? 0 }));
+      return jsonData(
+        pins.map((p) => ({ ...p, reviewCount: countMap[p.id] ?? 0 })),
+        200
+      );
     }
 
-    return jsonCachedData(pins, 60, 300);
+    // Map pins must stay fresh after admin create/delete/move — avoid CDN/browser cache.
+    return jsonData(pins);
   } catch (err) {
     console.error("benches/pins error:", err);
     return jsonError("Unable to load bench pins", "internal_error", 500);

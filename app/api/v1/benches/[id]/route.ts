@@ -132,6 +132,35 @@ export async function DELETE(
     const { id } = await params;
     const supabase = createSupabaseServer();
 
+    // Prefer atomic RPC when available.
+    const { data: rpcRows, error: rpcErr } = await supabase.rpc("delete_bench", { p_id: id });
+    if (!rpcErr) {
+      const row = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+      if (!row) {
+        return jsonError("Bench not found", "bench_not_found", 404);
+      }
+      return jsonData({
+        id: String((row as { id: string }).id),
+        name: String((row as { name: string }).name),
+        deleted: true
+      }, 200);
+    }
+
+    // Missing function / not migrated yet → fallback. Real failures (not found) still surface.
+    const rpcMissing =
+      rpcErr.code === "PGRST202" ||
+      /function .*delete_bench/i.test(rpcErr.message) ||
+      /could not find the function/i.test(rpcErr.message);
+    if (!rpcMissing) {
+      if (/bench not found/i.test(rpcErr.message) || rpcErr.code === "P0002") {
+        return jsonError("Bench not found", "bench_not_found", 404);
+      }
+      console.error("delete_bench RPC error:", rpcErr);
+      return jsonError("Unable to delete bench", "internal_error", 500);
+    }
+
+    console.warn("delete_bench RPC unavailable, using direct deletes:", rpcErr.message);
+
     const { data: existing, error: lookupErr } = await supabase
       .from("benches")
       .select("id, name")
@@ -146,10 +175,28 @@ export async function DELETE(
       return jsonError("Bench not found", "bench_not_found", 404);
     }
 
-    // Related tags/visits/reviews/wishlist rows cascade via FK.
-    const { error } = await supabase.from("benches").delete().eq("id", id);
+    // Explicit child deletes in case production FKs are missing CASCADE.
+    const childTables = ["bench_reviews", "bench_visits", "wishlist_items", "bench_tags"] as const;
+    for (const table of childTables) {
+      const { error: childErr } = await supabase.from(table).delete().eq("bench_id", id);
+      if (childErr) {
+        console.error(`benches/[id] DELETE ${table} error:`, childErr);
+        return jsonError("Unable to delete bench", "internal_error", 500);
+      }
+    }
+
+    const { data: deletedRows, error } = await supabase
+      .from("benches")
+      .delete()
+      .eq("id", id)
+      .select("id, name");
+
     if (error) {
       console.error("benches/[id] DELETE error:", error);
+      return jsonError("Unable to delete bench", "internal_error", 500);
+    }
+    if (!deletedRows || deletedRows.length === 0) {
+      console.error("benches/[id] DELETE matched zero rows for", id);
       return jsonError("Unable to delete bench", "internal_error", 500);
     }
 
