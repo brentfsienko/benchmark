@@ -15,7 +15,7 @@ const MAX_REVIEW_BODY_CHARS = 1000;
 const MAX_PHOTOS_PER_REVIEW = 4;
 const MAX_PHOTO_BASE64_CHARS = 2_000_000;
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!hasSupabase()) {
@@ -23,13 +23,24 @@ export async function GET(
   }
   try {
     const { id } = await params;
+    const lite = request.nextUrl.searchParams.get("lite") === "1";
     const supabase = createSupabaseServer();
 
-    const { data: reviewRows, error } = await supabase
-      .from("bench_reviews")
-      .select("id, bench_id, user_id, rating, body, photo_base64_items, created_at")
-      .eq("bench_id", id)
-      .order("created_at", { ascending: false });
+    const reviewQuery = lite
+      ? supabase
+          .from("bench_reviews")
+          .select("id, bench_id, user_id, rating, body, created_at")
+          .eq("bench_id", id)
+          .order("created_at", { ascending: false })
+          .limit(40)
+      : supabase
+          .from("bench_reviews")
+          .select("id, bench_id, user_id, rating, body, photo_base64_items, created_at")
+          .eq("bench_id", id)
+          .order("created_at", { ascending: false })
+          .limit(200);
+
+    const { data: reviewRows, error } = await reviewQuery;
 
     if (error) {
       return jsonError("Unable to load reviews", "internal_error", 500);
@@ -58,7 +69,11 @@ export async function GET(
       author: usersMap[String(r.user_id)] ?? FALLBACK_AUTHOR,
       rating: Number(r.rating),
       body: String(r.body ?? ""),
-      photoBase64Items: Array.isArray(r.photo_base64_items) ? r.photo_base64_items : [],
+      photoBase64Items: lite
+        ? []
+        : Array.isArray(r.photo_base64_items)
+          ? r.photo_base64_items
+          : [],
       createdAt: new Date(String(r.created_at)).toISOString()
     }));
     return jsonData(reviews);

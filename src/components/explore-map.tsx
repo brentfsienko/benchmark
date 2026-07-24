@@ -57,6 +57,8 @@ type ExploreMapProps = {
   onMapClick?: (lat: number, lng: number) => void;
   benchmarkedBenchIDs?: string[];
   enableFogOfWar?: boolean;
+  /** Fly to the user's GPS position once when the map first loads. */
+  centerOnUserOnLoad?: boolean;
 };
 
 export function ExploreMap({
@@ -69,7 +71,8 @@ export function ExploreMap({
   tempPlacement = null,
   onMapClick,
   benchmarkedBenchIDs = [],
-  enableFogOfWar = true
+  enableFogOfWar = true,
+  centerOnUserOnLoad = true
 }: ExploreMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<Map | null>(null);
@@ -139,6 +142,20 @@ export function ExploreMap({
         map.flyTo([lat, lng], 16, { duration: 0.35 });
       };
       onMapReady?.(flyTo);
+
+      if (centerOnUserOnLoad && "geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (!mapInstanceRef.current) return;
+            map.setView([pos.coords.latitude, pos.coords.longitude], 15, { animate: false });
+            emitBounds(map);
+          },
+          () => {
+            // Keep Green Lake fallback if permission denied / timeout.
+          },
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
+        );
+      }
     });
 
     return () => {
@@ -152,13 +169,13 @@ export function ExploreMap({
       vpMarkerRef.current = null;
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
-      if (geoWatchIDRef.current !== null && typeof navigator !== "undefined" && "geolocation" in navigator) {
+      if (geoWatchIDRef.current !== null && typeof window !== "undefined" && "geolocation" in navigator) {
         navigator.geolocation.clearWatch(geoWatchIDRef.current);
         geoWatchIDRef.current = null;
       }
       setMapReady(false);
     };
-  }, [mounted, onMapReady, emitBounds]);
+  }, [mounted, onMapReady, emitBounds, centerOnUserOnLoad]);
 
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current || typeof window === "undefined") return;
