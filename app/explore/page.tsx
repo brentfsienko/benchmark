@@ -90,8 +90,21 @@ export default function ExplorePage() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const applyFilters = useCallback((cache: Map<string, BenchPin>, f: ExploreFilters): BenchPin[] => {
+  const applyFilters = useCallback((
+    cache: Map<string, BenchPin>,
+    f: ExploreFilters,
+    bounds: ViewportBounds | null
+  ): BenchPin[] => {
     let arr = Array.from(cache.values());
+    if (bounds) {
+      arr = arr.filter(
+        (b) =>
+          b.latitude >= bounds.sw_lat &&
+          b.latitude <= bounds.ne_lat &&
+          b.longitude >= bounds.sw_lng &&
+          b.longitude <= bounds.ne_lng
+      );
+    }
     if (f.minRating) arr = arr.filter((b) => b.averageRating >= f.minRating!);
     if (f.types && f.types.length > 0) arr = arr.filter((b) => f.types!.includes(b.type));
     return arr;
@@ -105,7 +118,7 @@ export default function ExplorePage() {
       for (const pin of data) {
         cache.set(pin.id, pin);
       }
-      const filtered = applyFilters(cache, filtersRef.current);
+      const filtered = applyFilters(cache, filtersRef.current, bounds);
       setBenches(filtered);
       setLoading(false);
       setSelectedBenchID((prev) => {
@@ -124,11 +137,18 @@ export default function ExplorePage() {
 
   const handleBoundsChange = useCallback((bounds: ViewportBounds) => {
     currentBoundsRef.current = bounds;
+    // Instantly narrow the carousel to whatever is already cached in view.
+    const filtered = applyFilters(pinCacheRef.current, filtersRef.current, bounds);
+    setBenches(filtered);
+    setSelectedBenchID((prev) => {
+      if (prev && filtered.some((b) => b.id === prev)) return prev;
+      return filtered.length > 0 ? filtered[0].id : null;
+    });
     refresh(bounds).catch(() => {});
-  }, [refresh]);
+  }, [applyFilters, refresh]);
 
   useEffect(() => {
-    const filtered = applyFilters(pinCacheRef.current, filters);
+    const filtered = applyFilters(pinCacheRef.current, filters, currentBoundsRef.current);
     setBenches(filtered);
     setSelectedBenchID((prev) => {
       if (prev && filtered.some((b) => b.id === prev)) return prev;
