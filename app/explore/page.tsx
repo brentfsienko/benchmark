@@ -51,6 +51,14 @@ const MoveIcon = () => (
   </svg>
 );
 
+const LocateIcon = () => (
+  <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx={12} cy={12} r={3} />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+    <circle cx={12} cy={12} r={7} />
+  </svg>
+);
+
 type ExploreFilters = {
   minRating?: number;
   types?: string[];
@@ -83,6 +91,7 @@ export default function ExplorePage() {
   const [addNeighborhood, setAddNeighborhood] = useState("volunteer park");
   const [addType, setAddType] = useState("park");
   const [addDescription, setAddDescription] = useState("");
+  const [locating, setLocating] = useState(false);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
@@ -214,6 +223,31 @@ export default function ExplorePage() {
 
   const handleMapReady = useCallback((flyTo: (lat: number, lng: number) => void) => {
     flyToRef.current = flyTo;
+  }, []);
+
+  const handleLocateMe = useCallback(() => {
+    if (!("geolocation" in navigator)) {
+      setError("location is unavailable on this device");
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        flyToRef.current(pos.coords.latitude, pos.coords.longitude);
+        setLocating(false);
+        trackEvent({ name: "explore_locate_me" });
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setError("enable location access to center the map on you");
+        } else {
+          setError("couldn't get your location — try again");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 15_000 }
+    );
   }, []);
 
   const handleMapClick = useCallback((lat: number, lng: number) => {
@@ -433,7 +467,7 @@ export default function ExplorePage() {
         )}
       </header>
 
-      {/* Add-mode floating buttons */}
+      {/* Map floating controls */}
       <div
         style={{
           position: "absolute",
@@ -446,54 +480,78 @@ export default function ExplorePage() {
         }}
       >
         {!addMode && !moveMode ? (
-          user && (
-            <>
-              {isAdmin && (
+          <>
+            <button
+              type="button"
+              onClick={handleLocateMe}
+              disabled={locating}
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                background: "var(--surface)",
+                border: "2px solid var(--border)",
+                color: "var(--text-primary)",
+                cursor: locating ? "wait" : "pointer",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                opacity: locating ? 0.7 : 1
+              }}
+              aria-label="Center map on my location"
+              title="Center on my location"
+            >
+              <LocateIcon />
+            </button>
+            {user && (
+              <>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={handleMoveClick}
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      background: "var(--surface)",
+                      border: "2px solid var(--border)",
+                      color: "var(--text-primary)",
+                      cursor: selectedBench ? "pointer" : "not-allowed",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      opacity: selectedBench ? 1 : 0.5
+                    }}
+                    disabled={!selectedBench}
+                    aria-label="Move selected bench"
+                    title={selectedBench ? "Move selected bench pin" : "Select a bench first"}
+                  >
+                    <MoveIcon />
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={handleMoveClick}
+                  className="button-primary"
+                  onClick={handlePlusClick}
+                  disabled={!isAdmin}
+                  title={isAdmin ? "Add bench" : "bench creation is disabled"}
                   style={{
                     width: 48,
                     height: 48,
                     borderRadius: "50%",
                     display: "grid",
                     placeItems: "center",
-                    background: "var(--surface)",
-                    border: "2px solid var(--border)",
-                    color: "var(--text-primary)",
-                    cursor: selectedBench ? "pointer" : "not-allowed",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                    opacity: selectedBench ? 1 : 0.5
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                    opacity: isAdmin ? 1 : 0.45,
+                    cursor: isAdmin ? "pointer" : "not-allowed"
                   }}
-                  disabled={!selectedBench}
-                  aria-label="Move selected bench"
-                  title={selectedBench ? "Move selected bench pin" : "Select a bench first"}
+                  aria-label={isAdmin ? "Add bench" : "Bench creation is disabled"}
                 >
-                  <MoveIcon />
+                  <PlusIcon />
                 </button>
-              )}
-              <button
-                type="button"
-                className="button-primary"
-                onClick={handlePlusClick}
-                disabled={!isAdmin}
-                title={isAdmin ? "Add bench" : "bench creation is disabled"}
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                  opacity: isAdmin ? 1 : 0.45,
-                  cursor: isAdmin ? "pointer" : "not-allowed"
-                }}
-                aria-label={isAdmin ? "Add bench" : "Bench creation is disabled"}
-              >
-                <PlusIcon />
-              </button>
-            </>
-          )
+              </>
+            )}
+          </>
         ) : (
           <>
             <button

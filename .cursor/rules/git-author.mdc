@@ -1,0 +1,24 @@
+---
+description: Commit as brentfsienko so GitHub/Vercel attribute correctly
+alwaysApply: true
+---
+
+# Git commit authorship
+
+When creating commits in this repo (or when asked to commit/PR for Benchmark):
+
+- Author and committer must be **`brentfsienko <brentfsienko@gmail.com>`** — never Cursor, never `*.local` hostname emails.
+- Before committing, verify identity if unsure:
+  - `git config user.email` should be `brentfsienko@gmail.com`
+- If config is wrong for this session, pass identity on the commit command:
+
+```bash
+git -c user.name="brentfsienko" -c user.email="brentfsienko@gmail.com" commit -m "$(cat <<'EOF'
+message
+
+EOF
+)"
+```
+
+- Do not amend already-pushed commits solely to fix authorship unless the user explicitly asks.
+- Vercel deploys depend on commits being linked to the GitHub user `brentfsienko`.
