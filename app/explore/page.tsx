@@ -105,7 +105,7 @@ export default function ExplorePage() {
   const currentBoundsRef = useRef<ViewportBounds | null>(null);
   const ignoreCarouselScrollRef = useRef(false);
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const detailCacheRef = useRef<Map<string, { bench: Bench; reviews: BenchReview[] }>>(new Map());
+  const detailCacheRef = useRef<Map<string, { bench: Bench; reviews: BenchReview[]; fetchedWithPhotos: boolean }>>(new Map());
   const [detailVersion, setDetailVersion] = useState(0);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
@@ -235,14 +235,16 @@ export default function ExplorePage() {
     }, behavior === "smooth" ? 350 : 50);
   }, []);
 
-  const prefetchBench = useCallback(async (benchId: string) => {
-    if (detailCacheRef.current.has(benchId)) return;
+  const prefetchBench = useCallback(async (benchId: string, options?: { withPhotos?: boolean }) => {
+    const withPhotos = Boolean(options?.withPhotos);
+    const existing = detailCacheRef.current.get(benchId);
+    if (existing && (!withPhotos || existing.fetchedWithPhotos)) return;
     try {
       const [bench, reviews] = await Promise.all([
         getBench(benchId),
-        listBenchReviews(benchId, { lite: true })
+        listBenchReviews(benchId, { lite: !withPhotos })
       ]);
-      detailCacheRef.current.set(benchId, { bench, reviews });
+      detailCacheRef.current.set(benchId, { bench, reviews, fetchedWithPhotos: withPhotos });
       setDetailVersion((v) => v + 1);
     } catch {
       // Prefetch is best-effort; sheet can retry on open.
@@ -254,9 +256,10 @@ export default function ExplorePage() {
     setSheetPin(bench);
     setSheetBenchID(bench.id);
     trackEvent({ name: "bench_opened_from_explore", benchId: bench.id });
-    if (!detailCacheRef.current.has(bench.id)) {
+    const cached = detailCacheRef.current.get(bench.id);
+    if (!cached?.fetchedWithPhotos) {
       setSheetLoading(true);
-      prefetchBench(bench.id).finally(() => setSheetLoading(false));
+      prefetchBench(bench.id, { withPhotos: true }).finally(() => setSheetLoading(false));
     } else {
       setSheetLoading(false);
     }
@@ -267,6 +270,14 @@ export default function ExplorePage() {
     setSheetPin(null);
     setSheetLoading(false);
   }, []);
+
+  const handleSheetReviewsUpdated = useCallback((next: BenchReview[]) => {
+    if (!sheetBenchID) return;
+    const prev = detailCacheRef.current.get(sheetBenchID);
+    if (!prev) return;
+    detailCacheRef.current.set(sheetBenchID, { ...prev, reviews: next, fetchedWithPhotos: true });
+    setDetailVersion((v) => v + 1);
+  }, [sheetBenchID]);
 
   useEffect(() => {
     const el = carouselRef.current;
@@ -288,12 +299,13 @@ export default function ExplorePage() {
 
   useEffect(() => {
     if (!sheetBenchID) return;
-    if (detailCacheRef.current.has(sheetBenchID)) {
+    const cached = detailCacheRef.current.get(sheetBenchID);
+    if (cached?.fetchedWithPhotos) {
       setSheetLoading(false);
       return;
     }
     setSheetLoading(true);
-    prefetchBench(sheetBenchID).finally(() => setSheetLoading(false));
+    prefetchBench(sheetBenchID, { withPhotos: true }).finally(() => setSheetLoading(false));
   }, [sheetBenchID, prefetchBench]);
 
   const handleCarouselScroll = useCallback(() => {
@@ -966,8 +978,9 @@ export default function ExplorePage() {
           pin={sheetPin}
           bench={sheetCached?.bench ?? null}
           reviews={sheetCached?.reviews ?? []}
-          loading={sheetLoading && !sheetCached}
+          loading={sheetLoading && !sheetCached?.fetchedWithPhotos}
           onClose={closeBenchSheet}
+          onReviewsUpdated={handleSheetReviewsUpdated}
         />
       )}
     </div>
