@@ -287,10 +287,26 @@ function LandingView({
       <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>play</h1>
       <p className="muted" style={{ marginTop: 0 }}>choose a challenge</p>
       {!profileId && (
-        <div className="surface-card" style={{ padding: 12, marginBottom: 8 }}>
-          <p style={{ margin: 0, fontSize: 12 }}>
+        <div className="surface-card" style={{ padding: 16, marginBottom: 12 }}>
+          <p style={{ margin: "0 0 12px", fontSize: 13 }}>
             sign in to open challenge details and track your progress.
           </p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Link
+              href="/auth/login?next=/challenges"
+              className="button-primary"
+              style={{ display: "inline-block" }}
+            >
+              sign in
+            </Link>
+            <Link
+              href="/auth/signup?next=/challenges"
+              className="button-secondary"
+              style={{ display: "inline-block" }}
+            >
+              create account
+            </Link>
+          </div>
         </div>
       )}
 
