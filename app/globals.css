@@ -302,6 +302,15 @@ main {
   display: none;
 }
 
+.onboarding-scroller {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  touch-action: pan-x;
+}
+.onboarding-scroller::-webkit-scrollbar {
+  display: none;
+}
+
 /* Toast notification */
 @keyframes toast-in {
   0%   { transform: translateY(100%); opacity: 0; }
