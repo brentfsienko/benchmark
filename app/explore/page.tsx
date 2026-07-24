@@ -201,10 +201,11 @@ export default function ExplorePage() {
   }, []);
 
   const handlePlusClick = useCallback(() => {
+    if (!isAdmin) return;
     setAddMode(true);
     setMoveMode(false);
     setTempPlacement(null);
-  }, []);
+  }, [isAdmin]);
 
   const handleMoveClick = useCallback(() => {
     if (!selectedBench) return;
@@ -455,15 +456,19 @@ export default function ExplorePage() {
                 type="button"
                 className="button-primary"
                 onClick={handlePlusClick}
+                disabled={!isAdmin}
+                title={isAdmin ? "Add bench" : "bench creation is disabled"}
                 style={{
                   width: 48,
                   height: 48,
                   borderRadius: "50%",
                   display: "grid",
                   placeItems: "center",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  opacity: isAdmin ? 1 : 0.45,
+                  cursor: isAdmin ? "pointer" : "not-allowed"
                 }}
-                aria-label="Add bench"
+                aria-label={isAdmin ? "Add bench" : "Bench creation is disabled"}
               >
                 <PlusIcon />
               </button>
@@ -735,19 +740,9 @@ export default function ExplorePage() {
                   style={{ width: "100%", marginTop: 4 }}
                 />
               </label>
-              <button
-                type="submit"
-                className="button-primary"
-                disabled={!isAdmin}
-                title={isAdmin ? undefined : "bench creation is currently limited"}
-              >
+              <button type="submit" className="button-primary">
                 confirm bench
               </button>
-              {!isAdmin ? (
-                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                  bench creation is currently limited — you can try the flow, but adding is invite-only for now.
-                </p>
-              ) : null}
             </form>
             {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
           </div>
