@@ -5,16 +5,16 @@ import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
 import {
   decideFollowRequest,
-  getBench,
   getProfile,
+  listBenchCards,
   listFollowRequests,
   listFollowers,
   listFollowing,
-  listWishlist,
   removeWishlistItem,
   updateProfile
 } from "@/src/lib/api";
-import type { Bench, UserProfile } from "@/src/lib/types";
+import type { BenchCard } from "@/src/lib/api";
+import type { UserProfile } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { trackEvent } from "@/src/lib/analytics";
 
@@ -33,7 +33,7 @@ export default function ProfilePage() {
   const [draft, setDraft] = useState<{ displayName: string; username: string; bio: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [wishlist, setWishlist] = useState<string[]>([]);
-  const [wishlistBenches, setWishlistBenches] = useState<Record<string, Bench>>({});
+  const [wishlistBenches, setWishlistBenches] = useState<Record<string, BenchCard>>({});
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
   const [incomingRequests, setIncomingRequests] = useState<string[]>([]);
@@ -51,14 +51,13 @@ export default function ProfilePage() {
     }
     Promise.all([
       getProfile(profileId),
-      listWishlist(profileId),
       listFollowers(profileId),
       listFollowing(profileId),
       listFollowRequests(profileId)
     ])
-      .then(([user, items, fers, fing, req]) => {
-        setProfile(user);
-        setWishlist(items);
+      .then(([userProfile, fers, fing, req]) => {
+        setProfile(userProfile);
+        setWishlist(userProfile.wishlistBenchIDs ?? []);
         setFollowers(fers);
         setFollowing(fing);
         setIncomingRequests(req.incoming);
@@ -67,16 +66,21 @@ export default function ProfilePage() {
   }, [profileId, user]);
 
   useEffect(() => {
-    if (wishlist.length === 0) return;
-    const toFetch = wishlist.filter((id) => !wishlistBenches[id]);
-    if (toFetch.length === 0) return;
-    Promise.all(toFetch.map((id) => getBench(id).catch(() => null)))
-      .then((results) => {
-        const map: Record<string, Bench> = {};
-        results.forEach((b) => { if (b) map[b.id] = b; });
-        setWishlistBenches((prev) => ({ ...prev, ...map }));
-      });
-  }, [wishlist, wishlistBenches]);
+    if (wishlist.length === 0) {
+      setWishlistBenches({});
+      return;
+    }
+    let cancelled = false;
+    listBenchCards(wishlist)
+      .then((cards) => {
+        if (cancelled) return;
+        const map: Record<string, BenchCard> = {};
+        cards.forEach((b) => { map[b.id] = b; });
+        setWishlistBenches(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [wishlist]);
 
   const enterEditMode = () => {
     if (!profile) return;
@@ -121,7 +125,7 @@ export default function ProfilePage() {
       {!user ? (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to save your profile and wishlist</p>
-          <Link href="/auth/login" className="button-primary" style={{ display: "inline-block" }}>
+          <Link href="/auth/login" className="button-primary">
             sign in
           </Link>
         </div>

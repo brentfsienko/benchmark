@@ -57,7 +57,7 @@ export async function GET(
       .select("id, user_id, bench_id, rating, created_at")
       .in("user_id", feedUserIds)
       .order("created_at", { ascending: false })
-      .limit(feed ? 300 : 200);
+      .limit(feed ? 50 : 40);
 
     if (error) {
       return jsonError("Unable to load activity", "internal_error", 500);

@@ -55,7 +55,20 @@ export default function AddBenchPage() {
         <SectionHeader title="add a bench" subtitle="sign in to add benches" />
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>you need to be signed in to add benches.</p>
-          <Link href="/auth/login" className="button-primary" style={{ display: "inline-block" }}>sign in</Link>
+          <Link href="/auth/login" className="button-primary">sign in</Link>
+        </div>
+      </section>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <section className="screen">
+        <SectionHeader title="add a bench" subtitle="bench creation is disabled" />
+        <div className="surface-card" style={{ padding: 20 }}>
+          <p className="muted" style={{ margin: 0 }}>
+            bench creation is currently disabled for most accounts. check back soon!
+          </p>
         </div>
       </section>
     );
@@ -72,7 +85,6 @@ export default function AddBenchPage() {
   };
 
   const onConfirm = async () => {
-    if (!isAdmin) return;
     setSubmitting(true);
     try {
       const created = await createBench({
@@ -134,7 +146,7 @@ export default function AddBenchPage() {
             your bench has been added to the map at {finalNeighborhood}.
           </p>
           <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-            <Link href="/explore" className="button-primary" style={{ display: "inline-block" }}>
+            <Link href="/explore" className="button-primary">
               view on map
             </Link>
             <button type="button" className="button-secondary" onClick={reset}>
@@ -180,9 +192,8 @@ export default function AddBenchPage() {
               type="button"
               className="button-primary"
               style={{ flex: 1, height: 48 }}
-              disabled={submitting || !isAdmin}
+              disabled={submitting}
               onClick={onConfirm}
-              title={isAdmin ? undefined : "bench creation is currently limited"}
             >
               {submitting ? "adding…" : "confirm & add bench"}
             </button>
@@ -196,11 +207,6 @@ export default function AddBenchPage() {
               back
             </button>
           </div>
-          {!isAdmin ? (
-            <p className="muted" style={{ margin: "12px 0 0", fontSize: 13 }}>
-              bench creation is currently limited — you can review the flow, but adding is invite-only for now.
-            </p>
-          ) : null}
         </div>
         {status ? <p style={{ color: "var(--danger)", marginTop: 12 }}>{status}</p> : null}
       </section>

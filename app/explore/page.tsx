@@ -1,13 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { createBench, getProfile, listBenchPins, updateBenchLocation } from "@/src/lib/api";
 import type { BenchPin } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
-import { ExploreMap, type ViewportBounds } from "@/src/components/explore-map";
+import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
+
+const ExploreMap = dynamic(
+  () => import("@/src/components/explore-map").then((m) => m.ExploreMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
+        <p className="muted" style={{ margin: 0, fontSize: 13 }}>loading map…</p>
+      </div>
+    )
+  }
+);
 
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -77,8 +90,21 @@ export default function ExplorePage() {
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
-  const applyFilters = useCallback((cache: Map<string, BenchPin>, f: ExploreFilters): BenchPin[] => {
+  const applyFilters = useCallback((
+    cache: Map<string, BenchPin>,
+    f: ExploreFilters,
+    bounds: ViewportBounds | null
+  ): BenchPin[] => {
     let arr = Array.from(cache.values());
+    if (bounds) {
+      arr = arr.filter(
+        (b) =>
+          b.latitude >= bounds.sw_lat &&
+          b.latitude <= bounds.ne_lat &&
+          b.longitude >= bounds.sw_lng &&
+          b.longitude <= bounds.ne_lng
+      );
+    }
     if (f.minRating) arr = arr.filter((b) => b.averageRating >= f.minRating!);
     if (f.types && f.types.length > 0) arr = arr.filter((b) => f.types!.includes(b.type));
     return arr;
@@ -92,7 +118,7 @@ export default function ExplorePage() {
       for (const pin of data) {
         cache.set(pin.id, pin);
       }
-      const filtered = applyFilters(cache, filtersRef.current);
+      const filtered = applyFilters(cache, filtersRef.current, bounds);
       setBenches(filtered);
       setLoading(false);
       setSelectedBenchID((prev) => {
@@ -111,11 +137,18 @@ export default function ExplorePage() {
 
   const handleBoundsChange = useCallback((bounds: ViewportBounds) => {
     currentBoundsRef.current = bounds;
+    // Instantly narrow the carousel to whatever is already cached in view.
+    const filtered = applyFilters(pinCacheRef.current, filtersRef.current, bounds);
+    setBenches(filtered);
+    setSelectedBenchID((prev) => {
+      if (prev && filtered.some((b) => b.id === prev)) return prev;
+      return filtered.length > 0 ? filtered[0].id : null;
+    });
     refresh(bounds).catch(() => {});
-  }, [refresh]);
+  }, [applyFilters, refresh]);
 
   useEffect(() => {
-    const filtered = applyFilters(pinCacheRef.current, filters);
+    const filtered = applyFilters(pinCacheRef.current, filters, currentBoundsRef.current);
     setBenches(filtered);
     setSelectedBenchID((prev) => {
       if (prev && filtered.some((b) => b.id === prev)) return prev;
@@ -151,7 +184,7 @@ export default function ExplorePage() {
 
   useEffect(() => {
     if (profileId) {
-      getProfile(profileId)
+      getProfile(profileId, { slim: true })
         .then((p) => setBenchmarkedIDs(p.benchmarkedBenchIDs))
         .catch(() => {});
     }
@@ -188,10 +221,11 @@ export default function ExplorePage() {
   }, []);
 
   const handlePlusClick = useCallback(() => {
+    if (!isAdmin) return;
     setAddMode(true);
     setMoveMode(false);
     setTempPlacement(null);
-  }, []);
+  }, [isAdmin]);
 
   const handleMoveClick = useCallback(() => {
     if (!selectedBench) return;
@@ -442,15 +476,19 @@ export default function ExplorePage() {
                 type="button"
                 className="button-primary"
                 onClick={handlePlusClick}
+                disabled={!isAdmin}
+                title={isAdmin ? "Add bench" : "bench creation is disabled"}
                 style={{
                   width: 48,
                   height: 48,
                   borderRadius: "50%",
                   display: "grid",
                   placeItems: "center",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                  opacity: isAdmin ? 1 : 0.45,
+                  cursor: isAdmin ? "pointer" : "not-allowed"
                 }}
-                aria-label="Add bench"
+                aria-label={isAdmin ? "Add bench" : "Bench creation is disabled"}
               >
                 <PlusIcon />
               </button>
@@ -722,19 +760,9 @@ export default function ExplorePage() {
                   style={{ width: "100%", marginTop: 4 }}
                 />
               </label>
-              <button
-                type="submit"
-                className="button-primary"
-                disabled={!isAdmin}
-                title={isAdmin ? undefined : "bench creation is currently limited"}
-              >
+              <button type="submit" className="button-primary">
                 confirm bench
               </button>
-              {!isAdmin ? (
-                <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-                  bench creation is currently limited — you can try the flow, but adding is invite-only for now.
-                </p>
-              ) : null}
             </form>
             {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
           </div>

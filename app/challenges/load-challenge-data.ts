@@ -65,15 +65,12 @@ export async function loadChallengeData(): Promise<ChallengePageData> {
 
   const benchIds = top8.map((b) => b.id);
 
-  const [profileRes, summaryCountRes, summaryPhotoRes, friendRows] = await Promise.all([
+  const [profileRes, summaryCountRes, friendRows] = await Promise.all([
     profileId
       ? supabase.from("bench_reviews").select("bench_id").eq("user_id", profileId).in("bench_id", benchIds)
       : Promise.resolve({ data: null }),
     benchIds.length > 0
       ? supabase.from("bench_reviews").select("bench_id").in("bench_id", benchIds)
-      : Promise.resolve({ data: null }),
-    benchIds.length > 0
-      ? supabase.from("bench_reviews").select("bench_id, photo_base64_items").in("bench_id", benchIds).not("photo_base64_items", "is", null).order("created_at", { ascending: false }).limit(benchIds.length)
       : Promise.resolve({ data: null }),
     gl && profileId
       ? loadFriendsProgress(supabase, gl.id, profileId)
@@ -90,20 +87,11 @@ export async function loadChallengeData(): Promise<ChallengePageData> {
     countMap[bid] = (countMap[bid] ?? 0) + 1;
   }
 
-  const photoMap: Record<string, string> = {};
-  for (const r of summaryPhotoRes.data ?? []) {
-    const bid = String((r as { bench_id: string }).bench_id);
-    if (bid in photoMap) continue;
-    const photos = Array.isArray((r as { photo_base64_items: unknown }).photo_base64_items) ? (r as { photo_base64_items: string[] }).photo_base64_items : [];
-    if (photos.length > 0) photoMap[bid] = String(photos[0]);
-  }
-
   const benchList: BenchWithStatus[] = top8
     .map((b) => ({
       ...b,
       benchmarked: bmSet.has(b.id),
       reviewCount: countMap[b.id] ?? 0,
-      topPhoto: photoMap[b.id] ?? undefined,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 

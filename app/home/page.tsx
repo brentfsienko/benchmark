@@ -48,7 +48,7 @@ export default function HomePage() {
       {!user && (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to view your feed</p>
-          <Link href="/auth/login" className="button-primary" style={{ display: "inline-block" }}>
+          <Link href="/auth/login" className="button-primary">
             sign in
           </Link>
         </div>
@@ -62,7 +62,7 @@ export default function HomePage() {
           <p className="muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
             find a bench on the map and submit your first benchmark!
           </p>
-          <Link href="/explore" className="button-primary" style={{ display: "inline-block" }}>
+          <Link href="/explore" className="button-primary">
             explore benches
           </Link>
         </div>

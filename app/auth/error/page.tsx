@@ -16,7 +16,7 @@ function AuthErrorContent() {
       </div>
       <h1 style={{ marginTop: 0 }}>auth error</h1>
       <p className="muted">{message}</p>
-      <Link href="/auth/login" className="button-primary" style={{ display: "inline-block", marginTop: 16 }}>
+      <Link href="/auth/login" className="button-primary" style={{ marginTop: 16 }}>
         try again
       </Link>
     </section>

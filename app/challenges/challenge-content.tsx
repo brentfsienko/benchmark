@@ -144,10 +144,10 @@ export function ChallengeContent({ data }: { data: ChallengePageData }) {
       <section className="screen">
         <h1 style={{ marginTop: 0, textTransform: "lowercase" }}>sign in required</h1>
         <p className="muted">sign in to open individual challenge pages and progress.</p>
-        <Link href="/auth/login" className="button-primary" style={{ display: "inline-block", marginRight: 8 }}>
+        <Link href="/auth/login" className="button-primary" style={{ marginRight: 8 }}>
           sign in
         </Link>
-        <Link href="/challenges" className="button-secondary" style={{ display: "inline-block" }}>
+        <Link href="/challenges" className="button-secondary">
           back
         </Link>
       </section>
@@ -166,7 +166,7 @@ export function ChallengeContent({ data }: { data: ChallengePageData }) {
   if (!canOpenDetailedProgress) {
     return (
       <section className="screen">
-        <Link href="/challenges" className="button-secondary" style={{ display: "inline-block", marginBottom: 10 }}>← all challenges</Link>
+        <Link href="/challenges" className="button-secondary" style={{ marginBottom: 10 }}>← all challenges</Link>
         <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>
           {selectedChallenge.title}
         </h1>
@@ -183,7 +183,7 @@ export function ChallengeContent({ data }: { data: ChallengePageData }) {
 
   return (
     <section className="screen">
-      <Link href="/challenges" className="button-secondary" style={{ display: "inline-block", marginBottom: 10 }}>← all challenges</Link>
+      <Link href="/challenges" className="button-secondary" style={{ marginBottom: 10 }}>← all challenges</Link>
       <h1 style={{ marginTop: 0, fontSize: 22, fontWeight: 700, textTransform: "lowercase" }}>
         green lake challenge
       </h1>
@@ -295,14 +295,14 @@ function LandingView({
             <Link
               href="/auth/login?next=/challenges"
               className="button-primary"
-              style={{ display: "inline-block" }}
+             
             >
               sign in
             </Link>
             <Link
               href="/auth/signup?next=/challenges"
               className="button-secondary"
-              style={{ display: "inline-block" }}
+             
             >
               create account
             </Link>

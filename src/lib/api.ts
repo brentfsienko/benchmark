@@ -28,13 +28,17 @@ class APIError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getApiBaseUrl();
   const url = base ? `${base}${path.startsWith("/") ? "" : "/"}${path}` : path;
+  const method = (init?.method ?? "GET").toUpperCase();
+  // GETs respect Cache-Control from the API (pins/challenges/etc.). Mutations stay fresh.
+  const cache: RequestCache =
+    init?.cache ?? (method === "GET" ? "default" : "no-store");
   const response = await fetch(url, {
     ...init,
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {})
     },
-    cache: "no-store"
+    cache
   });
   if (!response.ok) {
     let message = "Request failed.";
@@ -91,7 +95,7 @@ export async function listBenchPins(bounds: BenchPinBounds, minRating?: number):
 }
 
 export function getBench(benchID: string): Promise<Bench> {
-  return request<Bench>(`/benches/${benchID}`);
+  return request<Bench>(`/benches/${benchID}`, { cache: "no-store" });
 }
 
 export type BenchSummary = { benchId: string; reviewCount: number; topPhoto: string | null };
@@ -101,8 +105,21 @@ export function getBenchSummaries(benchIds: string[]): Promise<BenchSummary[]> {
   return request<BenchSummary[]>(`/benches/summaries?ids=${benchIds.join(",")}`);
 }
 
+export type BenchCard = {
+  id: string;
+  name: string;
+  neighborhood: string;
+  type: string;
+  averageRating: number;
+};
+
+export function listBenchCards(benchIds: string[]): Promise<BenchCard[]> {
+  if (benchIds.length === 0) return Promise.resolve([]);
+  return request<BenchCard[]>(`/benches/cards?ids=${benchIds.join(",")}`);
+}
+
 export function listBenchReviews(benchID: string): Promise<BenchReview[]> {
-  return request<BenchReview[]>(`/benches/${benchID}/reviews`);
+  return request<BenchReview[]>(`/benches/${benchID}/reviews`, { cache: "no-store" });
 }
 
 export function createBench(payload: Partial<Bench>): Promise<Bench> {
@@ -121,7 +138,14 @@ export function updateBenchLocation(benchID: string, latitude: number, longitude
 
 export async function submitBenchmark(
   benchID: string,
-  payload: { rating: number; body: string; photoBase64Items?: string[]; userId?: string }
+  payload: {
+    rating: number;
+    body: string;
+    photoBase64Items?: string[];
+    userId?: string;
+    latitude: number;
+    longitude: number;
+  }
 ): Promise<void> {
   const userId = payload.userId ?? env.currentUserID;
   await request<unknown>(`/benches/${benchID}/reviews`, {
@@ -130,13 +154,16 @@ export async function submitBenchmark(
       userId,
       rating: payload.rating,
       body: payload.body,
-      photoBase64Items: payload.photoBase64Items ?? []
+      photoBase64Items: payload.photoBase64Items ?? [],
+      latitude: payload.latitude,
+      longitude: payload.longitude
     })
   });
 }
 
-export function getProfile(userID: string): Promise<UserProfile> {
-  return request<UserProfile>(`/users/${userID}/profile`);
+export function getProfile(userID: string, options?: { slim?: boolean }): Promise<UserProfile> {
+  const suffix = options?.slim ? "?slim=1" : "";
+  return request<UserProfile>(`/users/${userID}/profile${suffix}`, { cache: "no-store" });
 }
 
 export function completeOnboarding(userID: string): Promise<{ onboardingComplete: boolean }> {
@@ -157,11 +184,11 @@ export function updateProfile(
 
 export function listActivity(userID: string, options?: { feed?: boolean }): Promise<ActivityItem[]> {
   const suffix = options?.feed ? "?feed=true" : "";
-  return request<ActivityItem[]>(`/users/${userID}/activity${suffix}`);
+  return request<ActivityItem[]>(`/users/${userID}/activity${suffix}`, { cache: "no-store" });
 }
 
 export function listWishlist(userID: string): Promise<string[]> {
-  return request<string[]>(`/users/${userID}/wishlist`);
+  return request<string[]>(`/users/${userID}/wishlist`, { cache: "no-store" });
 }
 
 export function addWishlistItem(userID: string, benchID: string): Promise<void> {
@@ -178,11 +205,11 @@ export function removeWishlistItem(userID: string, benchID: string): Promise<voi
 }
 
 export function listFollowers(userID: string): Promise<string[]> {
-  return request<string[]>(`/users/${userID}/followers`);
+  return request<string[]>(`/users/${userID}/followers`, { cache: "no-store" });
 }
 
 export function listFollowing(userID: string): Promise<string[]> {
-  return request<string[]>(`/users/${userID}/following`);
+  return request<string[]>(`/users/${userID}/following`, { cache: "no-store" });
 }
 
 export function followUser(_followerId: string, targetId: string): Promise<{ state: FollowRelationshipState }> {
@@ -200,7 +227,7 @@ export function unfollowUser(_followerId: string, targetId: string): Promise<{ s
 }
 
 export function listFollowRequests(userID: string): Promise<FollowRequests> {
-  return request<FollowRequests>(`/users/${userID}/follow-requests`);
+  return request<FollowRequests>(`/users/${userID}/follow-requests`, { cache: "no-store" });
 }
 
 export function decideFollowRequest(

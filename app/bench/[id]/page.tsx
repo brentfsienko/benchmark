@@ -7,9 +7,37 @@ import { addWishlistItem, getBench, listBenchReviews, listWishlist, removeWishli
 import type { Bench, BenchReview } from "@/src/lib/types";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
+import {
+  BENCHMARK_GEOFENCE_METERS,
+  distanceMeters,
+  formatDistanceMeters,
+  isWithinGeofence
+} from "@/src/lib/geo";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
+
+type ProximityState =
+  | { status: "idle" }
+  | { status: "checking" }
+  | { status: "within"; distance: number }
+  | { status: "outside"; distance: number }
+  | { status: "denied" }
+  | { status: "unavailable"; message: string };
+
+function readCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    if (!("geolocation" in navigator)) {
+      reject(new Error("location is unavailable on this device"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: true,
+      timeout: 12_000,
+      maximumAge: 15_000
+    });
+  });
+}
 
 const MAX_PHOTOS = 4;
 const MAX_ORIGINAL_PHOTO_BYTES = 20_000_000;
@@ -124,6 +152,8 @@ export default function BenchDetailPage() {
   const [wishlistLoading, setWishlistLoading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastKey = useRef(0);
+  const [proximity, setProximity] = useState<ProximityState>({ status: "idle" });
+  const benchCoordsRef = useRef<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (!benchID) return;
@@ -131,9 +161,53 @@ export default function BenchDetailPage() {
       .then(([benchData, reviewData]) => {
         setBench(benchData);
         setReviews(reviewData);
+        benchCoordsRef.current = {
+          latitude: benchData.latitude,
+          longitude: benchData.longitude
+        };
       })
       .catch((err: Error) => setStatus(err.message));
   }, [benchID]);
+
+  useEffect(() => {
+    if (!profileId || !bench) return;
+    if (!("geolocation" in navigator)) {
+      setProximity({ status: "unavailable", message: "location is unavailable on this device" });
+      return;
+    }
+
+    setProximity({ status: "checking" });
+    const benchPos = { latitude: bench.latitude, longitude: bench.longitude };
+
+    const applyPosition = (pos: GeolocationPosition) => {
+      const userPos = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      const distance = distanceMeters(userPos, benchPos);
+      setProximity(
+        isWithinGeofence(userPos, benchPos)
+          ? { status: "within", distance }
+          : { status: "outside", distance }
+      );
+    };
+
+    const onError = (err: GeolocationPositionError) => {
+      if (err.code === err.PERMISSION_DENIED) {
+        setProximity({ status: "denied" });
+      } else {
+        setProximity({
+          status: "unavailable",
+          message: "couldn't get your location — try again near the bench"
+        });
+      }
+    };
+
+    const watchId = navigator.geolocation.watchPosition(applyPosition, onError, {
+      enableHighAccuracy: true,
+      timeout: 12_000,
+      maximumAge: 10_000
+    });
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [profileId, bench]);
 
   useEffect(() => {
     if (!profileId) return;
@@ -206,13 +280,35 @@ export default function BenchDetailPage() {
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!profileId) return;
     setSubmitting(true);
+    setStatus(null);
     try {
+      const position = await readCurrentPosition();
+      const userPos = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude
+      };
+      const benchPos = benchCoordsRef.current ?? (bench
+        ? { latitude: bench.latitude, longitude: bench.longitude }
+        : null);
+      if (!benchPos) throw new Error("bench location unavailable");
+
+      const distance = distanceMeters(userPos, benchPos);
+      if (!isWithinGeofence(userPos, benchPos)) {
+        setProximity({ status: "outside", distance });
+        throw new Error(
+          `you must be within ${BENCHMARK_GEOFENCE_METERS}m of this bench to submit a benchmark (you're about ${formatDistanceMeters(distance)} away)`
+        );
+      }
+
       await submitBenchmark(benchID, {
         rating,
         body,
         photoBase64Items: photos,
-        userId: profileId ?? undefined
+        userId: profileId,
+        latitude: userPos.latitude,
+        longitude: userPos.longitude
       });
       const next = await listBenchReviews(benchID);
       setReviews(next);
@@ -221,13 +317,45 @@ export default function BenchDetailPage() {
       setRating(4);
       toastKey.current++;
       setToast("benchmark submitted! nice sit.");
-      trackEvent({ name: "benchmark_submitted", userId: profileId ?? "anonymous", benchId: benchID });
+      trackEvent({ name: "benchmark_submitted", userId: profileId, benchId: benchID });
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "unable to submit benchmark");
+      if (err && typeof err === "object" && "code" in err) {
+        const geoErr = err as GeolocationPositionError;
+        if (geoErr.code === geoErr.PERMISSION_DENIED) {
+          setProximity({ status: "denied" });
+          setStatus("location permission is required to submit a benchmark");
+        } else {
+          setStatus("couldn't get your location — try again near the bench");
+        }
+      } else {
+        setStatus(err instanceof Error ? err.message : "unable to submit benchmark");
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  const canSubmit =
+    Boolean(profileId) &&
+    !submitting &&
+    proximity.status === "within";
+
+  const proximityMessage = (() => {
+    switch (proximity.status) {
+      case "checking":
+        return "checking if you're near this bench…";
+      case "within":
+        return `you're within range (~${formatDistanceMeters(proximity.distance)} away)`;
+      case "outside":
+        return `you must be within ${BENCHMARK_GEOFENCE_METERS}m of this bench to submit a benchmark (you're about ${formatDistanceMeters(proximity.distance)} away)`;
+      case "denied":
+        return `enable location access to submit a benchmark — you must be within ${BENCHMARK_GEOFENCE_METERS}m of the bench`;
+      case "unavailable":
+        return proximity.message;
+      default:
+        return `you must be within ${BENCHMARK_GEOFENCE_METERS}m of this bench to submit a benchmark`;
+    }
+  })();
 
   const ratingKey = String(rating);
   const ratingLabel = RATING_LABELS[ratingKey] ?? "";
@@ -403,6 +531,27 @@ export default function BenchDetailPage() {
               rate this bench, leave a note, and attach photos of the view.
             </p>
 
+            {profileId && (
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: "10px 12px",
+                  borderRadius: "var(--radius)",
+                  border: "1px solid var(--border)",
+                  background:
+                    proximity.status === "within"
+                      ? "var(--accent-soft, rgba(45, 106, 79, 0.12))"
+                      : "var(--elevated, rgba(0,0,0,0.04))",
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  color:
+                    proximity.status === "within" ? "var(--accent)" : "var(--text-secondary)"
+                }}
+              >
+                {proximityMessage}
+              </div>
+            )}
+
             {/* Rating slider */}
             <div className="rating-slider-container" style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
@@ -507,8 +656,16 @@ export default function BenchDetailPage() {
             </div>
 
             {profileId ? (
-              <button className="button-primary" type="submit" disabled={submitting} style={{ width: "100%" }}>
-                {submitting ? "submitting…" : "submit benchmark"}
+              <button className="button-primary" type="submit" disabled={!canSubmit} style={{ width: "100%" }}>
+                {submitting
+                  ? "submitting…"
+                  : proximity.status === "checking"
+                    ? "checking location…"
+                    : proximity.status === "outside"
+                      ? "too far to submit"
+                      : proximity.status === "denied" || proximity.status === "unavailable"
+                        ? "location required"
+                        : "submit benchmark"}
               </button>
             ) : (
               <Link

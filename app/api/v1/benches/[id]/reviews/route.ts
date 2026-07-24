@@ -2,6 +2,12 @@ import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import { getRequestActor } from "@/src/lib/request-auth";
+import {
+  BENCHMARK_GEOFENCE_METERS,
+  distanceMeters,
+  formatDistanceMeters,
+  isWithinGeofence
+} from "@/src/lib/geo";
 import type { BenchReview } from "@/src/lib/types";
 
 const FALLBACK_AUTHOR = "community member";
@@ -79,6 +85,8 @@ export async function POST(
     const reviewBody = String(body.body ?? "").trim();
     const photoBase64ItemsRaw = Array.isArray(body.photoBase64Items) ? body.photoBase64Items : [];
     const photoBase64Items: string[] = photoBase64ItemsRaw.map((p: unknown) => String(p));
+    const userLat = Number(body.latitude);
+    const userLng = Number(body.longitude);
 
     if (!Number.isFinite(rating) || rating < 0 || rating > 5) {
       return jsonError("Rating must be between 0 and 5", "validation_error", 422);
@@ -92,9 +100,39 @@ export async function POST(
     if (photoBase64Items.some((p) => p.length > MAX_PHOTO_BASE64_CHARS)) {
       return jsonError("One or more photos are too large", "validation_error", 422);
     }
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return jsonError(
+        `location is required — you must be within ${BENCHMARK_GEOFENCE_METERS}m of this bench to submit a benchmark`,
+        "location_required",
+        422
+      );
+    }
+    if (userLat < -90 || userLat > 90 || userLng < -180 || userLng > 180) {
+      return jsonError("invalid location coordinates", "validation_error", 422);
+    }
+
+    const supabase = createSupabaseServer();
+
+    const { data: geomRows } = await supabase.rpc("get_bench_coords", { p_id: id });
+    const geomRow = Array.isArray(geomRows) ? geomRows[0] : geomRows;
+    const benchLat = Number(geomRow?.latitude);
+    const benchLng = Number(geomRow?.longitude);
+    if (!Number.isFinite(benchLat) || !Number.isFinite(benchLng)) {
+      return jsonError("Bench location unavailable", "bench_not_found", 404);
+    }
+
+    const userPos = { latitude: userLat, longitude: userLng };
+    const benchPos = { latitude: benchLat, longitude: benchLng };
+    const distance = distanceMeters(userPos, benchPos);
+    if (!isWithinGeofence(userPos, benchPos)) {
+      return jsonError(
+        `you must be within ${BENCHMARK_GEOFENCE_METERS}m of this bench to submit a benchmark (you're about ${formatDistanceMeters(distance)} away)`,
+        "outside_geofence",
+        403
+      );
+    }
 
     const reviewId = `review-${Date.now()}`;
-    const supabase = createSupabaseServer();
 
     const { data: userRow } = await supabase.from("users").select("display_name").eq("id", userId).single();
     const author = userRow?.display_name || FALLBACK_AUTHOR;
