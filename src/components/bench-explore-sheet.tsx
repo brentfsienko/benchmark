@@ -257,18 +257,13 @@ export function BenchExploreSheet({
     if (!dragging) return;
     const deltaPx = dragStartY.current - e.clientY;
     const deltaVh = (deltaPx / window.innerHeight) * 100;
-    setHeightVh(clamp(dragStartVh.current + deltaVh, PEEK_VH - 8, EXPANDED_VH + 2));
+    setHeightVh(clamp(dragStartVh.current + deltaVh, PEEK_VH, EXPANDED_VH + 2));
   };
 
   const onHandlePointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragging) return;
     e.currentTarget.releasePointerCapture(e.pointerId);
     setDragging(false);
-    const deltaPx = dragStartY.current - e.clientY;
-    if (deltaPx < -90 && heightVh < PEEK_VH + 4) {
-      onClose();
-      return;
-    }
     snapToNearest(heightVh);
   };
 
@@ -407,17 +402,12 @@ export function BenchExploreSheet({
         pointerEvents: "none"
       }}
     >
-      <button
-        type="button"
-        aria-label="Close bench details"
-        onClick={onClose}
+      <div
+        aria-hidden
         style={{
           position: "absolute",
           inset: 0,
-          border: "none",
           background: "rgba(35, 32, 27, 0.35)",
-          cursor: "pointer",
-          padding: 0,
           pointerEvents: "auto"
         }}
       />
