@@ -116,6 +116,10 @@ main {
   padding: 0 16px;
   font: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   transition: background 0.15s, transform 0.1s;
 }
 
@@ -141,6 +145,10 @@ main {
   padding: 0 16px;
   font: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   transition: background 0.15s, border-color 0.15s, transform 0.1s;
 }
 

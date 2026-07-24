@@ -126,7 +126,7 @@ function SignupForm() {
           <Link
             href={`/auth/login?next=${encodeURIComponent(next)}`}
             className="button-primary"
-            style={{ display: "inline-block", textAlign: "center" }}
+            style={{ textAlign: "center" }}
           >
             go to sign in
           </Link>

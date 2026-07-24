@@ -121,7 +121,7 @@ export default function ProfilePage() {
       {!user ? (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to save your profile and wishlist</p>
-          <Link href="/auth/login" className="button-primary" style={{ display: "inline-block" }}>
+          <Link href="/auth/login" className="button-primary">
             sign in
           </Link>
         </div>
