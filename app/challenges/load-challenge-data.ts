@@ -59,6 +59,7 @@ export async function loadChallengeData(): Promise<ChallengePageData> {
     neighborhood: String(r.neighborhood),
     type: String(r.bench_type),
     averageRating: Number(r.average_rating),
+    reviewCount: Number(r.review_count ?? 0),
     latitude: Number(r.lat),
     longitude: Number(r.lng),
   }));

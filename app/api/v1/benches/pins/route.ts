@@ -10,6 +10,7 @@ function toPin(row: Record<string, unknown>): BenchPin {
     neighborhood: String(row.neighborhood),
     type: String(row.bench_type),
     averageRating: Number(row.average_rating),
+    reviewCount: Number(row.review_count ?? 0),
     latitude: Number(row.lat),
     longitude: Number(row.lng),
   };
@@ -45,7 +46,24 @@ export async function GET(request: NextRequest) {
       return jsonError("Unable to load bench pins", "internal_error", 500);
     }
 
-    const pins: BenchPin[] = (rows ?? []).map((r: Record<string, unknown>) => toPin(r));
+    let pins: BenchPin[] = (rows ?? []).map((r: Record<string, unknown>) => toPin(r));
+
+    // Fallback if RPC hasn't been migrated to include review_count yet.
+    const needsCounts = pins.length > 0 && !(rows?.[0] && "review_count" in (rows[0] as object));
+    if (needsCounts) {
+      const ids = pins.map((p) => p.id);
+      const { data: reviewRows } = await supabase
+        .from("bench_reviews")
+        .select("bench_id")
+        .in("bench_id", ids);
+      const countMap: Record<string, number> = {};
+      for (const row of reviewRows ?? []) {
+        const bid = String((row as { bench_id: string }).bench_id);
+        countMap[bid] = (countMap[bid] ?? 0) + 1;
+      }
+      pins = pins.map((p) => ({ ...p, reviewCount: countMap[p.id] ?? 0 }));
+    }
+
     return jsonCachedData(pins, 60, 300);
   } catch (err) {
     console.error("benches/pins error:", err);

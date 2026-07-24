@@ -882,7 +882,7 @@ export default function ExplorePage() {
                 >
                   <p style={{ margin: 0, fontWeight: isSelected ? 700 : 600, fontSize: 14 }}>{bench.name}</p>
                   <p className="muted" style={{ margin: 0, fontSize: 11 }}>
-                    {bench.neighborhood} • {bench.averageRating.toFixed(1)}★
+                    {bench.neighborhood} • {bench.averageRating.toFixed(1)}★ · {bench.reviewCount ?? 0} benchmark{(bench.reviewCount ?? 0) === 1 ? "" : "s"}
                   </p>
                   <button
                     type="button"
