@@ -1,7 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenchReviews, updateBenchLocation } from "@/src/lib/api";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
@@ -12,6 +19,13 @@ import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 import { isOnboardingComplete } from "@/src/lib/onboarding";
 import { useRouter } from "next/navigation";
+
+const ADD_FORM_PEEK_VH = 58;
+const ADD_FORM_EXPANDED_VH = 88;
+
+function clamp(n: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, n));
+}
 
 const ExploreMap = dynamic(
   () => import("@/src/components/explore-map").then((m) => m.ExploreMap),
@@ -105,6 +119,10 @@ export default function ExplorePage() {
   const [carouselPad, setCarouselPad] = useState(48);
   const [toast, setToast] = useState<string | null>(null);
   const toastKey = useRef(0);
+  const [addFormHeightVh, setAddFormHeightVh] = useState(ADD_FORM_PEEK_VH);
+  const [addFormDragging, setAddFormDragging] = useState(false);
+  const addFormDragStartY = useRef(0);
+  const addFormDragStartVh = useRef(ADD_FORM_PEEK_VH);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
 
   useEffect(() => {
@@ -112,6 +130,12 @@ export default function ExplorePage() {
       router.replace("/onboarding");
     }
   }, [router]);
+
+  useEffect(() => {
+    if (showAddForm) {
+      setAddFormHeightVh(ADD_FORM_EXPANDED_VH);
+    }
+  }, [showAddForm]);
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
   const currentBoundsRef = useRef<ViewportBounds | null>(null);
@@ -447,6 +471,30 @@ export default function ExplorePage() {
     setTempPlacement(null);
     setShowAddForm(false);
   }, []);
+
+  const onAddFormPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setAddFormDragging(true);
+    addFormDragStartY.current = e.clientY;
+    addFormDragStartVh.current = addFormHeightVh;
+  };
+
+  const onAddFormPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!addFormDragging) return;
+    const deltaPx = addFormDragStartY.current - e.clientY;
+    const deltaVh = (deltaPx / window.innerHeight) * 100;
+    setAddFormHeightVh(
+      clamp(addFormDragStartVh.current + deltaVh, ADD_FORM_PEEK_VH, ADD_FORM_EXPANDED_VH)
+    );
+  };
+
+  const onAddFormPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!addFormDragging) return;
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    setAddFormDragging(false);
+    const mid = (ADD_FORM_PEEK_VH + ADD_FORM_EXPANDED_VH) / 2;
+    setAddFormHeightVh(addFormHeightVh >= mid ? ADD_FORM_EXPANDED_VH : ADD_FORM_PEEK_VH);
+  };
 
   const handleConfirmMove = useCallback(async () => {
     if (!tempPlacement || !selectedBenchID) return;
@@ -928,75 +976,139 @@ export default function ExplorePage() {
         )}
       </div>
 
-      {/* Add bench form modal */}
+      {/* Add bench form sheet — above bottom nav, draggable + scrollable */}
       {showAddForm && tempPlacement && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 10,
+            zIndex: 60,
             background: "rgba(0,0,0,0.4)",
             display: "flex",
             alignItems: "flex-end",
-            justifyContent: "center"
+            justifyContent: "center",
+            pointerEvents: "auto"
           }}
           onClick={handleCancelAdd}
         >
           <div
             className="surface-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add a bench"
             style={{
               width: "100%",
               maxWidth: 420,
-              maxHeight: "85vh",
-              overflowY: "auto",
-              padding: 20,
+              height: `${addFormHeightVh}vh`,
+              maxHeight: "calc(100dvh - var(--safe-top, 0px))",
+              display: "flex",
+              flexDirection: "column",
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
               borderTopLeftRadius: "var(--radius-lg, 16px)",
               borderTopRightRadius: "var(--radius-lg, 16px)",
-              boxShadow: "0 -4px 24px rgba(0,0,0,0.15)"
+              boxShadow: "0 -8px 32px rgba(0,0,0,0.18)",
+              overflow: "hidden",
+              transition: addFormDragging ? "none" : "height 0.22s ease",
+              paddingBottom: "max(20px, var(--safe-bottom))"
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ margin: "0 0 8px", fontSize: 18, textTransform: "lowercase" }}>add a bench</h2>
-            <p className="muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
-              pin placed at {tempPlacement.lat.toFixed(5)}, {tempPlacement.lng.toFixed(5)}
-            </p>
-            <form onSubmit={handleAddSubmit} style={{ display: "grid", gap: 12 }}>
-              <label>
-                name
-                <input
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  required
-                  style={{ width: "100%", marginTop: 4 }}
-                />
-              </label>
-              <label>
-                neighborhood
-                <input
-                  value={addNeighborhood}
-                  onChange={(e) => setAddNeighborhood(e.target.value)}
-                  required
-                  style={{ width: "100%", marginTop: 4 }}
-                />
-              </label>
-              <label>
-                type
-                <input value={addType} onChange={(e) => setAddType(e.target.value)} style={{ width: "100%", marginTop: 4 }} />
-              </label>
-              <label>
-                description
-                <textarea
-                  value={addDescription}
-                  onChange={(e) => setAddDescription(e.target.value)}
-                  rows={3}
-                  style={{ width: "100%", marginTop: 4 }}
-                />
-              </label>
-              <button type="submit" className="button-primary">
-                confirm bench
-              </button>
-            </form>
-            {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
+            <div
+              onPointerDown={onAddFormPointerDown}
+              onPointerMove={onAddFormPointerMove}
+              onPointerUp={onAddFormPointerUp}
+              onPointerCancel={onAddFormPointerUp}
+              style={{
+                flexShrink: 0,
+                padding: "10px 20px 8px",
+                cursor: "grab",
+                touchAction: "none",
+                userSelect: "none"
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 4,
+                  borderRadius: 999,
+                  background: "var(--border)",
+                  margin: "0 auto 12px"
+                }}
+              />
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <h2 style={{ margin: 0, fontSize: 18, textTransform: "lowercase" }}>add a bench</h2>
+                <button
+                  type="button"
+                  onClick={handleCancelAdd}
+                  aria-label="Close add bench form"
+                  style={{
+                    border: "none",
+                    background: "var(--elevated)",
+                    color: "var(--text-secondary)",
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    cursor: "pointer",
+                    fontSize: 18,
+                    lineHeight: 1
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <p className="muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
+                pin placed at {tempPlacement.lat.toFixed(5)}, {tempPlacement.lng.toFixed(5)}
+              </p>
+            </div>
+
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: "auto",
+                WebkitOverflowScrolling: "touch",
+                padding: "8px 20px 20px"
+              }}
+            >
+              <form onSubmit={handleAddSubmit} style={{ display: "grid", gap: 12 }}>
+                <label>
+                  name
+                  <input
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
+                    required
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                </label>
+                <label>
+                  neighborhood
+                  <input
+                    value={addNeighborhood}
+                    onChange={(e) => setAddNeighborhood(e.target.value)}
+                    required
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                </label>
+                <label>
+                  type
+                  <input value={addType} onChange={(e) => setAddType(e.target.value)} style={{ width: "100%", marginTop: 4 }} />
+                </label>
+                <label>
+                  description
+                  <textarea
+                    value={addDescription}
+                    onChange={(e) => setAddDescription(e.target.value)}
+                    rows={3}
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
+                </label>
+                <button type="submit" className="button-primary" style={{ width: "100%", marginTop: 4 }}>
+                  confirm bench
+                </button>
+              </form>
+              {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
+            </div>
           </div>
         </div>
       )}
