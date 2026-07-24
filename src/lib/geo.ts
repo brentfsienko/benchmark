@@ -2,6 +2,9 @@
  *  40m is tight enough to require being at the sit, but forgiving of typical phone GPS error. */
 export const BENCHMARK_GEOFENCE_METERS = 40;
 
+/** Minimum spacing between benches when creating a new one. */
+export const BENCH_CREATE_MIN_SPACING_METERS = 40;
+
 const EARTH_RADIUS_METERS = 6_371_000;
 
 export type LatLng = {
@@ -34,4 +37,21 @@ export function formatDistanceMeters(meters: number): string {
   if (meters < 10) return `${Math.round(meters)}m`;
   if (meters < 1000) return `${Math.round(meters)}m`;
   return `${(meters / 1000).toFixed(1)}km`;
+}
+
+/** Nearest point within `radiusMeters`, or null if none. */
+export function findNearestWithinRadius<T extends LatLng>(
+  origin: LatLng,
+  candidates: T[],
+  radiusMeters: number = BENCH_CREATE_MIN_SPACING_METERS
+): { item: T; distance: number } | null {
+  let best: { item: T; distance: number } | null = null;
+  for (const item of candidates) {
+    const distance = distanceMeters(origin, item);
+    if (distance > radiusMeters) continue;
+    if (!best || distance < best.distance) {
+      best = { item, distance };
+    }
+  }
+  return best;
 }

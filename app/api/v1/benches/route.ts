@@ -2,6 +2,10 @@ import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import { isRequestAdmin } from "@/src/lib/admin-access";
+import {
+  BENCH_CREATE_MIN_SPACING_METERS,
+  formatDistanceMeters
+} from "@/src/lib/geo";
 import type { Bench } from "@/src/lib/types";
 
 const DEFAULT_USER_ID = "user-1";
@@ -32,8 +36,37 @@ export async function POST(request: NextRequest) {
     if (latitude < -90 || latitude > 90) return jsonError("Latitude must be between -90 and 90", "validation_error", 422);
     if (longitude < -180 || longitude > 180) return jsonError("Longitude must be between -180 and 180", "validation_error", 422);
 
-    const id = `bench-${Date.now()}`;
     const supabase = createSupabaseServer();
+
+    const { data: nearbyRows, error: nearbyErr } = await supabase.rpc("list_nearby_benches", {
+      p_lat: latitude,
+      p_lng: longitude,
+      p_radius_meters: BENCH_CREATE_MIN_SPACING_METERS,
+      p_min_rating: null,
+      p_min_view_score: null,
+      p_min_remoteness_score: null,
+      p_bench_type: null
+    });
+    if (nearbyErr) {
+      console.error("list_nearby_benches (create spacing) error:", nearbyErr);
+      return jsonError("Unable to validate bench location", "internal_error", 500);
+    }
+    const nearby = Array.isArray(nearbyRows) ? nearbyRows : [];
+    if (nearby.length > 0) {
+      const closest = nearby[0] as { name?: string; distance_meters?: number };
+      const nearbyName = String(closest.name ?? "another bench");
+      const dist =
+        typeof closest.distance_meters === "number"
+          ? ` (~${formatDistanceMeters(closest.distance_meters)} away)`
+          : "";
+      return jsonError(
+        `a bench already exists within ${BENCH_CREATE_MIN_SPACING_METERS}m (${nearbyName}${dist}). move the pin farther away to add a new one.`,
+        "bench_too_close",
+        409
+      );
+    }
+
+    const id = `bench-${Date.now()}`;
 
     const { data: rows, error } = await supabase.rpc("insert_bench", {
       p_id: id,

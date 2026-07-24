@@ -6,6 +6,7 @@ import {
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -18,6 +19,11 @@ import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 import { isOnboardingComplete } from "@/src/lib/onboarding";
+import {
+  BENCH_CREATE_MIN_SPACING_METERS,
+  findNearestWithinRadius,
+  formatDistanceMeters
+} from "@/src/lib/geo";
 import { useRouter } from "next/navigation";
 
 const ADD_FORM_PEEK_VH = 58;
@@ -255,6 +261,20 @@ export default function ExplorePage() {
   const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
   const sheetCached = sheetBenchID ? detailCacheRef.current.get(sheetBenchID) : undefined;
+
+  const createSpacingConflict = useMemo(() => {
+    if (!tempPlacement || !addMode) return null;
+    const candidates = Array.from(pinCacheRef.current.values());
+    return findNearestWithinRadius(
+      { latitude: tempPlacement.lat, longitude: tempPlacement.lng },
+      candidates,
+      BENCH_CREATE_MIN_SPACING_METERS
+    );
+  }, [tempPlacement, addMode, benches]);
+
+  const createSpacingMessage = createSpacingConflict
+    ? `a bench already exists within ${BENCH_CREATE_MIN_SPACING_METERS}m (${createSpacingConflict.item.name} · ~${formatDistanceMeters(createSpacingConflict.distance)} away). move the pin farther away to add a new one.`
+    : null;
   // detailVersion bumps when prefetch finishes so sheet re-renders from cache.
   void detailVersion;
 
@@ -519,6 +539,10 @@ export default function ExplorePage() {
     async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!tempPlacement || !isAdmin) return;
+      if (createSpacingConflict) {
+        setAddStatus(createSpacingMessage);
+        return;
+      }
       try {
         const created = await createBench({
           name: addName,
@@ -541,7 +565,19 @@ export default function ExplorePage() {
         setAddStatus(err instanceof Error ? err.message : "unable to add bench");
       }
     },
-    [tempPlacement, isAdmin, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd, showToast]
+    [
+      tempPlacement,
+      isAdmin,
+      createSpacingConflict,
+      createSpacingMessage,
+      addName,
+      addNeighborhood,
+      addType,
+      addDescription,
+      refresh,
+      handleCancelAdd,
+      showToast
+    ]
   );
 
   return (
@@ -825,7 +861,9 @@ export default function ExplorePage() {
           }}
         >
           {addMode
-            ? "tap the map to place your new bench"
+            ? createSpacingMessage
+              ? createSpacingMessage
+              : "tap the map to place your new bench"
             : `tap map to reposition ${selectedBench?.name ?? "bench"}`}
         </div>
       )}
@@ -1071,6 +1109,23 @@ export default function ExplorePage() {
                 padding: "8px 20px 20px"
               }}
             >
+              {createSpacingMessage && (
+                <div
+                  role="alert"
+                  style={{
+                    marginBottom: 12,
+                    padding: "10px 12px",
+                    borderRadius: "var(--radius)",
+                    background: "rgba(166, 63, 50, 0.1)",
+                    border: "1px solid rgba(166, 63, 50, 0.35)",
+                    color: "var(--danger)",
+                    fontSize: 13,
+                    lineHeight: 1.45
+                  }}
+                >
+                  {createSpacingMessage}
+                </div>
+              )}
               <form onSubmit={handleAddSubmit} style={{ display: "grid", gap: 12 }}>
                 <label>
                   name
@@ -1078,6 +1133,7 @@ export default function ExplorePage() {
                     value={addName}
                     onChange={(e) => setAddName(e.target.value)}
                     required
+                    disabled={Boolean(createSpacingConflict)}
                     style={{ width: "100%", marginTop: 4 }}
                   />
                 </label>
@@ -1087,12 +1143,18 @@ export default function ExplorePage() {
                     value={addNeighborhood}
                     onChange={(e) => setAddNeighborhood(e.target.value)}
                     required
+                    disabled={Boolean(createSpacingConflict)}
                     style={{ width: "100%", marginTop: 4 }}
                   />
                 </label>
                 <label>
                   type
-                  <input value={addType} onChange={(e) => setAddType(e.target.value)} style={{ width: "100%", marginTop: 4 }} />
+                  <input
+                    value={addType}
+                    onChange={(e) => setAddType(e.target.value)}
+                    disabled={Boolean(createSpacingConflict)}
+                    style={{ width: "100%", marginTop: 4 }}
+                  />
                 </label>
                 <label>
                   description
@@ -1100,14 +1162,27 @@ export default function ExplorePage() {
                     value={addDescription}
                     onChange={(e) => setAddDescription(e.target.value)}
                     rows={3}
+                    disabled={Boolean(createSpacingConflict)}
                     style={{ width: "100%", marginTop: 4 }}
                   />
                 </label>
-                <button type="submit" className="button-primary" style={{ width: "100%", marginTop: 4 }}>
-                  confirm bench
+                <button
+                  type="submit"
+                  className="button-primary"
+                  disabled={Boolean(createSpacingConflict)}
+                  style={{
+                    width: "100%",
+                    marginTop: 4,
+                    opacity: createSpacingConflict ? 0.55 : 1,
+                    cursor: createSpacingConflict ? "not-allowed" : "pointer"
+                  }}
+                >
+                  {createSpacingConflict ? "too close to existing bench" : "confirm bench"}
                 </button>
               </form>
-              {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
+              {addStatus && !createSpacingMessage && (
+                <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>
+              )}
             </div>
           </div>
         </div>
