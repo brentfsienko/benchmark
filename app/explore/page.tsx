@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { createBench, getProfile, listBenchPins, updateBenchLocation } from "@/src/lib/api";
-import type { BenchPin } from "@/src/lib/types";
+import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, updateBenchLocation } from "@/src/lib/api";
+import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
+import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
@@ -21,6 +21,9 @@ const ExploreMap = dynamic(
     )
   }
 );
+
+const CAROUSEL_CARD_WIDTH = 168;
+const CAROUSEL_GAP = 10;
 
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -92,10 +95,18 @@ export default function ExplorePage() {
   const [addType, setAddType] = useState("park");
   const [addDescription, setAddDescription] = useState("");
   const [locating, setLocating] = useState(false);
+  const [sheetBenchID, setSheetBenchID] = useState<string | null>(null);
+  const [sheetPin, setSheetPin] = useState<BenchPin | null>(null);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [carouselPad, setCarouselPad] = useState(48);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
   const carouselRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
   const currentBoundsRef = useRef<ViewportBounds | null>(null);
+  const ignoreCarouselScrollRef = useRef(false);
+  const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailCacheRef = useRef<Map<string, { bench: Bench; reviews: BenchReview[] }>>(new Map());
+  const [detailVersion, setDetailVersion] = useState(0);
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
 
@@ -207,19 +218,129 @@ export default function ExplorePage() {
 
   const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
+  const sheetCached = sheetBenchID ? detailCacheRef.current.get(sheetBenchID) : undefined;
+  // detailVersion bumps when prefetch finishes so sheet re-renders from cache.
+  void detailVersion;
+
+  const scrollCarouselToSelected = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const scroller = carouselRef.current;
+    const card = selectedCardRef.current;
+    if (!scroller || !card) return;
+    ignoreCarouselScrollRef.current = true;
+    const target =
+      card.offsetLeft - (scroller.clientWidth - card.offsetWidth) / 2;
+    scroller.scrollTo({ left: Math.max(0, target), behavior });
+    window.setTimeout(() => {
+      ignoreCarouselScrollRef.current = false;
+    }, behavior === "smooth" ? 350 : 50);
+  }, []);
+
+  const prefetchBench = useCallback(async (benchId: string) => {
+    if (detailCacheRef.current.has(benchId)) return;
+    try {
+      const [bench, reviews] = await Promise.all([
+        getBench(benchId),
+        listBenchReviews(benchId, { lite: true })
+      ]);
+      detailCacheRef.current.set(benchId, { bench, reviews });
+      setDetailVersion((v) => v + 1);
+    } catch {
+      // Prefetch is best-effort; sheet can retry on open.
+    }
+  }, []);
+
+  const openBenchSheet = useCallback((bench: BenchPin) => {
+    setSelectedBenchID(bench.id);
+    setSheetPin(bench);
+    setSheetBenchID(bench.id);
+    trackEvent({ name: "bench_opened_from_explore", benchId: bench.id });
+    if (!detailCacheRef.current.has(bench.id)) {
+      setSheetLoading(true);
+      prefetchBench(bench.id).finally(() => setSheetLoading(false));
+    } else {
+      setSheetLoading(false);
+    }
+  }, [prefetchBench]);
+
+  const closeBenchSheet = useCallback(() => {
+    setSheetBenchID(null);
+    setSheetPin(null);
+    setSheetLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const measure = () => {
+      setCarouselPad(Math.max(16, (el.clientWidth - CAROUSEL_CARD_WIDTH) / 2));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [benches.length, loading]);
+
+  useEffect(() => {
+    if (!selectedBenchID || benches.length === 0) return;
+    scrollCarouselToSelected("smooth");
+    void prefetchBench(selectedBenchID);
+  }, [selectedBenchID, benches, scrollCarouselToSelected, prefetchBench]);
+
+  useEffect(() => {
+    if (!sheetBenchID) return;
+    if (detailCacheRef.current.has(sheetBenchID)) {
+      setSheetLoading(false);
+      return;
+    }
+    setSheetLoading(true);
+    prefetchBench(sheetBenchID).finally(() => setSheetLoading(false));
+  }, [sheetBenchID, prefetchBench]);
+
+  const handleCarouselScroll = useCallback(() => {
+    if (ignoreCarouselScrollRef.current) return;
+    const scroller = carouselRef.current;
+    if (!scroller || benches.length === 0) return;
+    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    scrollSettleTimerRef.current = setTimeout(() => {
+      const centerX = scroller.scrollLeft + scroller.clientWidth / 2;
+      let bestId = benches[0]?.id ?? null;
+      let bestDist = Number.POSITIVE_INFINITY;
+      const children = Array.from(scroller.children) as HTMLElement[];
+      children.forEach((child, i) => {
+        const mid = child.offsetLeft + child.offsetWidth / 2;
+        const dist = Math.abs(mid - centerX);
+        if (dist < bestDist && benches[i]) {
+          bestDist = dist;
+          bestId = benches[i].id;
+        }
+      });
+      if (bestId && bestId !== selectedBenchID) {
+        const bench = benches.find((b) => b.id === bestId);
+        if (bench) {
+          setSelectedBenchID(bench.id);
+          flyToRef.current(bench.latitude, bench.longitude);
+        }
+      }
+    }, 80);
+  }, [benches, selectedBenchID]);
 
   const handleSelectFromMap = useCallback((bench: BenchPin) => {
+    if (bench.id === selectedBenchID) {
+      openBenchSheet(bench);
+      return;
+    }
     setSelectedBenchID(bench.id);
     flyToRef.current(bench.latitude, bench.longitude);
-    setTimeout(() => {
-      selectedCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    }, 100);
-  }, []);
+  }, [selectedBenchID, openBenchSheet]);
 
   const handleSelectFromCard = useCallback((bench: BenchPin) => {
+    if (bench.id === selectedBenchID) {
+      openBenchSheet(bench);
+      return;
+    }
     setSelectedBenchID(bench.id);
     flyToRef.current(bench.latitude, bench.longitude);
-  }, []);
+  }, [selectedBenchID, openBenchSheet]);
 
   const handleMapReady = useCallback((flyTo: (lat: number, lng: number) => void) => {
     flyToRef.current = flyTo;
@@ -360,6 +481,7 @@ export default function ExplorePage() {
           onMapClick={handleMapClick}
           benchmarkedBenchIDs={benchmarkedIDs}
           enableFogOfWar={false}
+          centerOnUserOnLoad
         />
       </div>
 
@@ -688,12 +810,17 @@ export default function ExplorePage() {
           <div
             ref={carouselRef}
             className="explore-carousel"
+            onScroll={handleCarouselScroll}
             style={{
               display: "flex",
-              gap: 10,
+              gap: CAROUSEL_GAP,
               overflowX: "auto",
               paddingBottom: 4,
-              scrollSnapType: "x mandatory"
+              paddingLeft: carouselPad,
+              paddingRight: carouselPad,
+              scrollSnapType: "x mandatory",
+              scrollPaddingInline: carouselPad,
+              WebkitOverflowScrolling: "touch"
             }}
           >
             {benches.map((bench) => {
@@ -713,7 +840,7 @@ export default function ExplorePage() {
                   onClick={() => handleSelectFromCard(bench)}
                   style={{
                     flexShrink: 0,
-                    width: 168,
+                    width: CAROUSEL_CARD_WIDTH,
                     padding: 12,
                     borderRadius: "var(--radius)",
                     background: isSelected ? "var(--surface)" : "rgba(247,241,232,0.95)",
@@ -721,7 +848,7 @@ export default function ExplorePage() {
                     boxShadow: isSelected ? "0 4px 16px rgba(0,0,0,0.08)" : "0 2px 8px rgba(0,0,0,0.04)",
                     scrollSnapAlign: "center",
                     cursor: "pointer",
-                    transition: "all 0.2s ease",
+                    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
                     display: "flex",
                     flexDirection: "column",
                     gap: 4
@@ -731,22 +858,28 @@ export default function ExplorePage() {
                   <p className="muted" style={{ margin: 0, fontSize: 11 }}>
                     {bench.neighborhood} • {bench.averageRating.toFixed(1)}★
                   </p>
-                  <Link
-                    href={`/bench/${bench.id}`}
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      trackEvent({ name: "bench_opened_from_explore", benchId: bench.id });
+                      openBenchSheet(bench);
                     }}
                     style={{
                       marginTop: 6,
                       fontSize: 12,
                       fontWeight: 600,
                       color: "var(--accent)",
-                      textDecoration: "none"
+                      textDecoration: "none",
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      textAlign: "left"
                     }}
                   >
                     open →
-                  </Link>
+                  </button>
                 </div>
               );
             })}
@@ -825,6 +958,16 @@ export default function ExplorePage() {
             {addStatus && <p style={{ margin: "12px 0 0", color: "var(--accent)", fontSize: 13 }}>{addStatus}</p>}
           </div>
         </div>
+      )}
+
+      {sheetPin && (
+        <BenchExploreSheet
+          pin={sheetPin}
+          bench={sheetCached?.bench ?? null}
+          reviews={sheetCached?.reviews ?? []}
+          loading={sheetLoading && !sheetCached}
+          onClose={closeBenchSheet}
+        />
       )}
     </div>
   );

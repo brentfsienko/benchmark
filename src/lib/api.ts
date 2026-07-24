@@ -118,8 +118,12 @@ export function listBenchCards(benchIds: string[]): Promise<BenchCard[]> {
   return request<BenchCard[]>(`/benches/cards?ids=${benchIds.join(",")}`);
 }
 
-export function listBenchReviews(benchID: string): Promise<BenchReview[]> {
-  return request<BenchReview[]>(`/benches/${benchID}/reviews`, { cache: "no-store" });
+export function listBenchReviews(
+  benchID: string,
+  options?: { lite?: boolean }
+): Promise<BenchReview[]> {
+  const suffix = options?.lite ? "?lite=1" : "";
+  return request<BenchReview[]>(`/benches/${benchID}/reviews${suffix}`, { cache: "no-store" });
 }
 
 export function createBench(payload: Partial<Bench>): Promise<Bench> {
