@@ -8,12 +8,15 @@ import {
   formatDistanceMeters,
   isWithinGeofence
 } from "@/src/lib/geo";
+import {
+  MAX_PHOTO_BASE64_CHARS,
+  MAX_PHOTOS_PER_REVIEW
+} from "@/src/lib/photo-limits";
 import type { BenchReview } from "@/src/lib/types";
 
 const FALLBACK_AUTHOR = "community member";
 const MAX_REVIEW_BODY_CHARS = 1000;
-const MAX_PHOTOS_PER_REVIEW = 4;
-const MAX_PHOTO_BASE64_CHARS = 2_000_000;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

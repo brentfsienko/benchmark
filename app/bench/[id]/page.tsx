@@ -13,6 +13,10 @@ import {
   formatDistanceMeters,
   isWithinGeofence
 } from "@/src/lib/geo";
+import {
+  MAX_PHOTOS_PER_REVIEW,
+  optimizePhotoForUpload
+} from "@/src/lib/optimize-photo";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
@@ -40,10 +44,7 @@ function readCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
-const MAX_PHOTOS = 4;
-const MAX_ORIGINAL_PHOTO_BYTES = 20_000_000;
-const MAX_PHOTO_BASE64_CHARS = 1_700_000;
-const MAX_IMAGE_DIMENSION = 1600;
+const MAX_PHOTOS = MAX_PHOTOS_PER_REVIEW;
 
 const RATING_LABELS: Record<string, string> = {
   "1": "hard pass",
@@ -72,58 +73,6 @@ function HeartIcon({ filled }: { filled: boolean }) {
       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
     </svg>
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-function loadImageFromFile(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Unable to decode image"));
-    };
-    image.src = url;
-  });
-}
-
-async function optimizePhotoForUpload(file: File): Promise<string> {
-  const image = await loadImageFromFile(file);
-  const maxEdge = Math.max(image.naturalWidth, image.naturalHeight) || 1;
-  let scale = Math.min(1, MAX_IMAGE_DIMENSION / maxEdge);
-  const qualities = [0.82, 0.74, 0.66, 0.58];
-
-  for (let sizeStep = 0; sizeStep < 3; sizeStep++) {
-    const width = Math.max(1, Math.round(image.naturalWidth * scale));
-    const height = Math.max(1, Math.round(image.naturalHeight * scale));
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Unable to process image");
-    ctx.drawImage(image, 0, 0, width, height);
-
-    for (const quality of qualities) {
-      const dataUrl = canvas.toDataURL("image/jpeg", quality);
-      if (dataUrl.length <= MAX_PHOTO_BASE64_CHARS) {
-        return dataUrl;
-      }
-    }
-    scale *= 0.8;
-  }
-  throw new Error("Photo is still too large after optimization");
 }
 
 export default function BenchDetailPage() {
@@ -238,30 +187,18 @@ export default function BenchDetailPage() {
   const onPhotosSelected = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
     const remaining = MAX_PHOTOS - photos.length;
-    const toProcess = files.slice(0, remaining);
     const results: string[] = [];
-    for (const file of toProcess) {
-      if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
-        setStatus(`${file.name} is too large (max 20 MB before optimization)`);
-        continue;
-      }
+    for (const file of files.slice(0, remaining)) {
       try {
-        const optimized = await optimizePhotoForUpload(file);
-        results.push(optimized);
-      } catch {
-        try {
-          const fallback = await fileToBase64(file);
-          if (fallback.length <= MAX_PHOTO_BASE64_CHARS) {
-            results.push(fallback);
-          } else {
-            setStatus(`${file.name} is too large after optimization`);
-          }
-        } catch {
-          setStatus(`could not read ${file.name}`);
-        }
+        results.push(await optimizePhotoForUpload(file));
+      } catch (err) {
+        setStatus(err instanceof Error ? err.message : `could not process ${file.name}`);
       }
     }
-    setPhotos((prev) => [...prev, ...results]);
+    if (results.length > 0) {
+      setPhotos((prev) => [...prev, ...results]);
+      setStatus(null);
+    }
     e.target.value = "";
   }, [photos.length]);
 

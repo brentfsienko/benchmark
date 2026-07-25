@@ -21,6 +21,10 @@ import {
   formatDistanceMeters,
   isWithinGeofence
 } from "@/src/lib/geo";
+import {
+  MAX_PHOTOS_PER_REVIEW,
+  optimizePhotoForUpload
+} from "@/src/lib/optimize-photo";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 
 type BenchExploreSheetProps = {
@@ -47,9 +51,7 @@ type ProximityState =
 
 const PEEK_VH = 52;
 const EXPANDED_VH = 92;
-const MAX_PHOTOS = 4;
-const MAX_ORIGINAL_PHOTO_BYTES = 20_000_000;
-const MAX_PHOTO_BASE64_CHARS = 1_700_000;
+const MAX_PHOTOS = MAX_PHOTOS_PER_REVIEW;
 
 const RATING_LABELS: Record<string, string> = {
   "1": "hard pass",
@@ -115,15 +117,6 @@ function readCurrentPosition(): Promise<GeolocationPosition> {
       timeout: 12_000,
       maximumAge: 15_000
     });
-  });
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
   });
 }
 
@@ -274,19 +267,17 @@ export function BenchExploreSheet({
     const remaining = MAX_PHOTOS - photos.length;
     const results: string[] = [];
     for (const file of files.slice(0, remaining)) {
-      if (file.size > MAX_ORIGINAL_PHOTO_BYTES) {
-        setStatus(`${file.name} is too large`);
-        continue;
-      }
       try {
-        const data = await fileToBase64(file);
-        if (data.length <= MAX_PHOTO_BASE64_CHARS) results.push(data);
-        else setStatus(`${file.name} is too large`);
-      } catch {
-        setStatus(`could not read ${file.name}`);
+        const data = await optimizePhotoForUpload(file);
+        results.push(data);
+      } catch (err) {
+        setStatus(err instanceof Error ? err.message : `could not process ${file.name}`);
       }
     }
-    setPhotos((prev) => [...prev, ...results]);
+    if (results.length > 0) {
+      setPhotos((prev) => [...prev, ...results]);
+      setStatus(null);
+    }
     e.target.value = "";
   }, [photos.length]);
 

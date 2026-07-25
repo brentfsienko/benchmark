@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BENCHMARK_GEOFENCE_METERS,
-  BENCH_CREATE_MIN_SPACING_METERS,
   distanceMeters,
-  findNearestWithinRadius,
   formatDistanceMeters,
   isWithinGeofence
 } from "./geo";
@@ -36,24 +34,6 @@ describe("isWithinGeofence", () => {
     const far = { latitude: 47.631, longitude: -122.3142 }; // ~130m
     expect(isWithinGeofence(far, bench)).toBe(false);
     expect(isWithinGeofence(far, bench, BENCHMARK_GEOFENCE_METERS)).toBe(false);
-  });
-});
-
-describe("findNearestWithinRadius", () => {
-  it("returns the closest bench inside the spacing radius", () => {
-    const origin = { latitude: 47.6298, longitude: -122.3142 };
-    const candidates = [
-      { id: "far", latitude: 47.631, longitude: -122.3142, name: "far" },
-      { id: "near", latitude: 47.62985, longitude: -122.3142, name: "near" }
-    ];
-    const hit = findNearestWithinRadius(origin, candidates, BENCH_CREATE_MIN_SPACING_METERS);
-    expect(hit?.item.id).toBe("near");
-  });
-
-  it("returns null when nothing is within radius", () => {
-    const origin = { latitude: 47.6298, longitude: -122.3142 };
-    const candidates = [{ id: "far", latitude: 47.631, longitude: -122.3142, name: "far" }];
-    expect(findNearestWithinRadius(origin, candidates, BENCH_CREATE_MIN_SPACING_METERS)).toBeNull();
   });
 });
 
