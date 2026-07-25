@@ -25,3 +25,7 @@ dist/
 
 # OS
 .DS_Store
+
+# Large Seattle import artifacts
+scripts/bench-importer/output/
+scripts/bench-importer/data/
