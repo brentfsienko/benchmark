@@ -6,6 +6,7 @@ import {
   PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -41,6 +42,33 @@ const ExploreMap = dynamic(
 
 const CAROUSEL_CARD_WIDTH = 168;
 const CAROUSEL_GAP = 10;
+/** Fraction of the map viewport (centered) used for the preview carousel. */
+const CAROUSEL_FOCUS_FRACTION = 0.36;
+
+function pinInBounds(b: BenchPin, bounds: ViewportBounds): boolean {
+  return (
+    b.latitude >= bounds.sw_lat &&
+    b.latitude <= bounds.ne_lat &&
+    b.longitude >= bounds.sw_lng &&
+    b.longitude <= bounds.ne_lng
+  );
+}
+
+/** Shrink viewport bounds to a centered focus rect for the carousel. */
+function centerFocusBounds(bounds: ViewportBounds, fraction = CAROUSEL_FOCUS_FRACTION): ViewportBounds {
+  const latSpan = bounds.ne_lat - bounds.sw_lat;
+  const lngSpan = bounds.ne_lng - bounds.sw_lng;
+  const latPad = (latSpan * (1 - fraction)) / 2;
+  const lngPad = (lngSpan * (1 - fraction)) / 2;
+  // Bias slightly north — the carousel chrome covers the bottom of the map.
+  const northBias = latSpan * 0.06;
+  return {
+    sw_lat: bounds.sw_lat + latPad + northBias,
+    ne_lat: bounds.ne_lat - latPad + northBias,
+    sw_lng: bounds.sw_lng + lngPad,
+    ne_lng: bounds.ne_lng - lngPad
+  };
+}
 
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -97,6 +125,7 @@ export default function ExplorePage() {
   const { isAdmin, profileId, user } = useAuth();
   const pinCacheRef = useRef<Map<string, BenchPin>>(new Map());
   const [benches, setBenches] = useState<BenchPin[]>([]);
+  const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
   const [benchmarkedIDs, setBenchmarkedIDs] = useState<string[]>([]);
   const [filters, setFilters] = useState<ExploreFilters>({});
   const [loading, setLoading] = useState(true);
@@ -153,17 +182,19 @@ export default function ExplorePage() {
   ): BenchPin[] => {
     let arr = Array.from(cache.values());
     if (bounds) {
-      arr = arr.filter(
-        (b) =>
-          b.latitude >= bounds.sw_lat &&
-          b.latitude <= bounds.ne_lat &&
-          b.longitude >= bounds.sw_lng &&
-          b.longitude <= bounds.ne_lng
-      );
+      arr = arr.filter((b) => pinInBounds(b, bounds));
     }
     if (f.minRating) arr = arr.filter((b) => b.averageRating >= f.minRating!);
     if (f.types && f.types.length > 0) arr = arr.filter((b) => f.types!.includes(b.type));
     return arr;
+  }, []);
+
+  const pickSelection = useCallback((prev: string | null, mapPins: BenchPin[], bounds: ViewportBounds | null) => {
+    if (prev && mapPins.some((b) => b.id === prev)) return prev;
+    if (!bounds) return mapPins[0]?.id ?? null;
+    const focus = centerFocusBounds(bounds);
+    const centered = mapPins.filter((b) => pinInBounds(b, focus));
+    return centered[0]?.id ?? mapPins[0]?.id ?? null;
   }, []);
 
   const refresh = useCallback(async (bounds: ViewportBounds) => {
@@ -177,10 +208,7 @@ export default function ExplorePage() {
       const filtered = applyFilters(cache, filtersRef.current, bounds);
       setBenches(filtered);
       setLoading(false);
-      setSelectedBenchID((prev) => {
-        if (prev && filtered.some((b) => b.id === prev)) return prev;
-        return filtered.length > 0 ? filtered[0].id : null;
-      });
+      setSelectedBenchID((prev) => pickSelection(prev, filtered, bounds));
       trackEvent({
         name: "explore_loaded",
         metadata: { count: filtered.length, cached: cache.size }
@@ -189,28 +217,33 @@ export default function ExplorePage() {
       setError(err instanceof Error ? err.message : "unable to load benches");
       setLoading(false);
     }
-  }, [applyFilters]);
+  }, [applyFilters, pickSelection]);
 
   const handleBoundsChange = useCallback((bounds: ViewportBounds) => {
     currentBoundsRef.current = bounds;
-    // Instantly narrow the carousel to whatever is already cached in view.
+    setViewportBounds(bounds);
+    // Instantly narrow map pins to whatever is already cached in view.
     const filtered = applyFilters(pinCacheRef.current, filtersRef.current, bounds);
     setBenches(filtered);
-    setSelectedBenchID((prev) => {
-      if (prev && filtered.some((b) => b.id === prev)) return prev;
-      return filtered.length > 0 ? filtered[0].id : null;
-    });
+    setSelectedBenchID((prev) => pickSelection(prev, filtered, bounds));
     refresh(bounds).catch(() => {});
-  }, [applyFilters, refresh]);
+  }, [applyFilters, pickSelection, refresh]);
 
   useEffect(() => {
     const filtered = applyFilters(pinCacheRef.current, filters, currentBoundsRef.current);
     setBenches(filtered);
-    setSelectedBenchID((prev) => {
-      if (prev && filtered.some((b) => b.id === prev)) return prev;
-      return filtered.length > 0 ? filtered[0].id : null;
-    });
-  }, [filters, applyFilters]);
+    setSelectedBenchID((prev) => pickSelection(prev, filtered, currentBoundsRef.current));
+  }, [filters, applyFilters, pickSelection]);
+
+  const carouselBenches = useMemo(() => {
+    if (!viewportBounds) return benches.slice(0, 12);
+    const focus = centerFocusBounds(viewportBounds);
+    const centered = benches.filter((b) => pinInBounds(b, focus));
+    if (!selectedBenchID) return centered;
+    if (centered.some((b) => b.id === selectedBenchID)) return centered;
+    const selected = benches.find((b) => b.id === selectedBenchID);
+    return selected ? [selected, ...centered] : centered;
+  }, [benches, viewportBounds, selectedBenchID]);
 
   const toggleRating = useCallback((value: number) => {
     setFilters((prev) => {
@@ -247,10 +280,10 @@ export default function ExplorePage() {
   }, [profileId]);
 
   useEffect(() => {
-    if (benches.length > 0 && !selectedBenchID) {
-      setSelectedBenchID(benches[0].id);
+    if (carouselBenches.length > 0 && !selectedBenchID) {
+      setSelectedBenchID(carouselBenches[0].id);
     }
-  }, [benches, selectedBenchID]);
+  }, [carouselBenches, selectedBenchID]);
 
   const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
@@ -345,13 +378,13 @@ export default function ExplorePage() {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [benches.length, loading]);
+  }, [carouselBenches.length, loading]);
 
   useEffect(() => {
-    if (!selectedBenchID || benches.length === 0) return;
+    if (!selectedBenchID || carouselBenches.length === 0) return;
     scrollCarouselToSelected("smooth");
     void prefetchBench(selectedBenchID);
-  }, [selectedBenchID, benches, scrollCarouselToSelected, prefetchBench]);
+  }, [selectedBenchID, carouselBenches, scrollCarouselToSelected, prefetchBench]);
 
   useEffect(() => {
     if (!sheetBenchID) return;
@@ -367,30 +400,30 @@ export default function ExplorePage() {
   const handleCarouselScroll = useCallback(() => {
     if (ignoreCarouselScrollRef.current) return;
     const scroller = carouselRef.current;
-    if (!scroller || benches.length === 0) return;
+    if (!scroller || carouselBenches.length === 0) return;
     if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
     scrollSettleTimerRef.current = setTimeout(() => {
       const centerX = scroller.scrollLeft + scroller.clientWidth / 2;
-      let bestId = benches[0]?.id ?? null;
+      let bestId = carouselBenches[0]?.id ?? null;
       let bestDist = Number.POSITIVE_INFINITY;
       const children = Array.from(scroller.children) as HTMLElement[];
       children.forEach((child, i) => {
         const mid = child.offsetLeft + child.offsetWidth / 2;
         const dist = Math.abs(mid - centerX);
-        if (dist < bestDist && benches[i]) {
+        if (dist < bestDist && carouselBenches[i]) {
           bestDist = dist;
-          bestId = benches[i].id;
+          bestId = carouselBenches[i].id;
         }
       });
       if (bestId && bestId !== selectedBenchID) {
-        const bench = benches.find((b) => b.id === bestId);
+        const bench = carouselBenches.find((b) => b.id === bestId);
         if (bench) {
           setSelectedBenchID(bench.id);
           flyToRef.current(bench.latitude, bench.longitude);
         }
       }
     }, 80);
-  }, [benches, selectedBenchID]);
+  }, [carouselBenches, selectedBenchID]);
 
   const handleSelectFromMap = useCallback((bench: BenchPin) => {
     if (bench.id === selectedBenchID) {
@@ -672,7 +705,8 @@ export default function ExplorePage() {
               </button>
             )}
             <p className="muted" style={{ margin: 0, fontSize: 11 }}>
-              showing {benches.length} bench{benches.length !== 1 ? "es" : ""}
+              showing {carouselBenches.length} nearby
+              {benches.length !== carouselBenches.length ? ` · ${benches.length} on map` : ""}
             </p>
           </div>
         )}
@@ -894,8 +928,10 @@ export default function ExplorePage() {
               retry
             </button>
           </div>
-        ) : benches.length === 0 ? (
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>no benches nearby</p>
+        ) : carouselBenches.length === 0 ? (
+          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+            {benches.length > 0 ? "pan to center a bench" : "no benches nearby"}
+          </p>
         ) : (
           <div
             ref={carouselRef}
@@ -913,7 +949,7 @@ export default function ExplorePage() {
               WebkitOverflowScrolling: "touch"
             }}
           >
-            {benches.map((bench) => {
+            {carouselBenches.map((bench) => {
               const isSelected = bench.id === selectedBenchID;
               return (
                 <div
