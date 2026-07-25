@@ -14,7 +14,8 @@
     "quality:ci": "npm run lint && npm run typecheck && npm run test",
     "import:benches:parse": "node scripts/bench-importer/import-benches.js",
     "import:benches:photos": "node scripts/bench-importer/fetch-photos.js",
-    "import:benches": "node scripts/import-benches-to-db.js"
+    "import:benches": "node scripts/import-benches-to-db.js",
+    "import:benches:rename": "node scripts/bench-importer/rename-benches.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",

@@ -20,6 +20,7 @@ import {
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
+import { PhotoLightbox } from "@/src/components/photo-lightbox";
 import { Toast } from "@/src/components/toast";
 
 type ProximityState =
@@ -296,6 +297,11 @@ export default function BenchDetailPage() {
       (r.photoBase64Items ?? []).map((src) => ({ src, author: r.author, rating: r.rating }))
     )
   ];
+  const galleryPhotoSrcs = allPhotos.map((p) => p.src);
+  const lightboxPhotos =
+    photos.length > 0 && selectedPhoto && photos.includes(selectedPhoto)
+      ? photos
+      : galleryPhotoSrcs;
 
   return (
     <section className="screen">
@@ -444,23 +450,13 @@ export default function BenchDetailPage() {
             </div>
           )}
 
-          {selectedPhoto && (
-            <div
-              onClick={() => setSelectedPhoto(null)}
-              style={{
-                position: "fixed", inset: 0, zIndex: 100,
-                background: "rgba(0,0,0,0.85)", display: "flex",
-                alignItems: "center", justifyContent: "center",
-                padding: 20, cursor: "pointer"
-              }}
-            >
-              <img
-                src={selectedPhoto}
-                alt="Full view"
-                style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius)", objectFit: "contain" }}
-              />
-            </div>
-          )}
+          <PhotoLightbox
+            photos={lightboxPhotos}
+            src={selectedPhoto}
+            onClose={() => setSelectedPhoto(null)}
+            onChange={setSelectedPhoto}
+            alt={bench ? `Photo of ${bench.name}` : "Full view"}
+          />
 
           {/* Benchmark submission form */}
           <form onSubmit={onSubmit} className="surface-card" style={{ padding: 18, marginBottom: 14 }}>

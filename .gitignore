@@ -29,3 +29,4 @@ dist/
 # Large Seattle import artifacts
 scripts/bench-importer/output/
 scripts/bench-importer/data/
+scripts/bench-importer/cache/
