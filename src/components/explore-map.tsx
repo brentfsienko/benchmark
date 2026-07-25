@@ -18,6 +18,8 @@ export type ViewportBounds = {
 const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 } as const;
 const VOLUNTEER_PARK_CENTER = { lat: 47.6298, lng: -122.3142 } as const;
 const DEFAULT_ZOOM = 14;
+/** Shift fly-to center south so pins land in the clear map above the carousel. */
+const VISUAL_CENTER_OFFSET_Y_PX = 110;
 
 function benchPinSvg(selected: boolean, benchmarked?: boolean): string {
   const size = selected ? 32 : 24;
@@ -168,7 +170,12 @@ export function ExploreMap({
 
       const flyTo = (lat: number, lng: number) => {
         // Keep the user's zoom — never force a level that zooms them out.
-        map.flyTo([lat, lng], map.getZoom(), { duration: 0.35 });
+        // Offset so the pin sits in the visual center above the bottom carousel.
+        const zoom = map.getZoom();
+        const projected = map.project([lat, lng], zoom);
+        const adjusted = L.default.point(projected.x, projected.y + VISUAL_CENTER_OFFSET_Y_PX);
+        const center = map.unproject(adjusted, zoom);
+        map.flyTo(center, zoom, { duration: 0.4 });
       };
       onMapReady?.(flyTo);
 
