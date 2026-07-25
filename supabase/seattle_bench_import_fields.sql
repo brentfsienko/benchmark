@@ -50,10 +50,10 @@ CREATE OR REPLACE FUNCTION upsert_imported_bench(
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 DECLARE
-  v_geom geography(POINT, 4326);
+  v_geom extensions.geography(POINT, 4326);
   v_existing benches%ROWTYPE;
   v_length numeric;
   v_photos text[];
@@ -62,7 +62,7 @@ BEGIN
     RAISE EXCEPTION 'source_system and external_id are required';
   END IF;
 
-  v_geom := ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::geography;
+  v_geom := ST_SetSRID(ST_MakePoint(p_lng, p_lat), 4326)::extensions.geography;
 
   SELECT * INTO v_existing
   FROM benches
@@ -139,3 +139,7 @@ REVOKE ALL ON FUNCTION public.upsert_imported_bench(
   text, text, text, text, text, double precision, double precision,
   text, text, text, text, text, text, text, numeric, text, text, text, text, text[], jsonb, text, text[]
 ) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.upsert_imported_bench(
+  text, text, text, text, text, double precision, double precision,
+  text, text, text, text, text, text, text, numeric, text, text, text, text, text[], jsonb, text, text[]
+) TO service_role;
