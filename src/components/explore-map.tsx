@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Map, Marker } from "leaflet";
+import type { Map, Marker, MarkerClusterGroup } from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import type { BenchPin } from "@/src/lib/types";
 import { FogOverlay } from "./fog-overlay";
 
@@ -46,6 +48,11 @@ function userLocationSvg(): string {
   </svg>`;
 }
 
+function clusterPinHtml(count: number): string {
+  const size = count >= 100 ? 48 : count >= 25 ? 42 : count >= 10 ? 36 : 32;
+  return `<div class="bench-cluster-pin" style="width:${size}px;height:${size}px;line-height:${size}px">${count}</div>`;
+}
+
 type ExploreMapProps = {
   benches: BenchPin[];
   selectedBenchID: string | null;
@@ -76,6 +83,7 @@ export function ExploreMap({
 }: ExploreMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<Map | null>(null);
+  const clusterGroupRef = useRef<MarkerClusterGroup | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const tempMarkerRef = useRef<Marker | null>(null);
   const vpMarkerRef = useRef<Marker | null>(null);
@@ -107,7 +115,7 @@ export function ExploreMap({
   useEffect(() => {
     if (!mounted || !mapRef.current || typeof window === "undefined") return;
 
-    void import("leaflet").then((L) => {
+    void Promise.all([import("leaflet"), import("leaflet.markercluster")]).then(([L]) => {
       const proto = L.default.Icon.Default.prototype;
       if ("_getIconUrl" in proto) {
         delete (proto as unknown as Record<string, unknown>)["_getIconUrl"];
@@ -131,6 +139,26 @@ export function ExploreMap({
       }).addTo(map);
 
       L.default.control.zoom({ position: "bottomright" }).addTo(map);
+
+      const clusterGroup = L.default.markerClusterGroup({
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        spiderfyOnMaxZoom: true,
+        disableClusteringAtZoom: 18,
+        maxClusterRadius: 56,
+        iconCreateFunction: (cluster) => {
+          const count = cluster.getChildCount();
+          const size = count >= 100 ? 48 : count >= 25 ? 42 : count >= 10 ? 36 : 32;
+          return L.default.divIcon({
+            html: clusterPinHtml(count),
+            className: "bench-cluster",
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2]
+          });
+        }
+      });
+      clusterGroup.addTo(map);
+      clusterGroupRef.current = clusterGroup;
 
       mapInstanceRef.current = map;
       setMapReady(true);
@@ -161,6 +189,8 @@ export function ExploreMap({
 
     return () => {
       if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
+      clusterGroupRef.current?.clearLayers();
+      clusterGroupRef.current = null;
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
       markersRef.current = [];
@@ -289,14 +319,17 @@ export function ExploreMap({
   }, [mounted, tempPlacement]);
 
   useEffect(() => {
-    if (!mounted || !mapInstanceRef.current) return;
+    if (!mounted || !mapInstanceRef.current || !clusterGroupRef.current) return;
 
     void import("leaflet").then((L) => {
-      const map = mapInstanceRef.current!;
-      markersRef.current.forEach((m) => m.remove());
+      const cluster = clusterGroupRef.current;
+      if (!cluster) return;
+
+      cluster.clearLayers();
       markersRef.current = [];
 
       const bmSet = new Set(benchmarkedBenchIDs);
+      const markers: Marker[] = [];
 
       benches.forEach((bench) => {
         const isSelected = !addMode && bench.id === selectedBenchID;
@@ -309,7 +342,7 @@ export function ExploreMap({
           iconAnchor: [size / 2, size]
         });
 
-        const marker = L.default.marker([bench.latitude, bench.longitude], { icon }).addTo(map);
+        const marker = L.default.marker([bench.latitude, bench.longitude], { icon });
         marker.on("click", () => {
           if (addMode && onMapClick) {
             onMapClick(bench.latitude, bench.longitude);
@@ -317,10 +350,13 @@ export function ExploreMap({
             onSelectBench(bench);
           }
         });
-        markersRef.current.push(marker);
+        markers.push(marker);
       });
+
+      cluster.addLayers(markers);
+      markersRef.current = markers;
     });
-  }, [mounted, benches, selectedBenchID, onSelectBench, addMode, onMapClick, benchmarkedBenchIDs]);
+  }, [mounted, mapReady, benches, selectedBenchID, onSelectBench, addMode, onMapClick, benchmarkedBenchIDs]);
 
   if (!mounted) {
     return (
@@ -340,7 +376,7 @@ export function ExploreMap({
   }
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 200 }}>
+    <div className="explore-map" style={{ position: "relative", width: "100%", height: "100%", minHeight: 200 }}>
       <div
         ref={mapRef}
         style={{

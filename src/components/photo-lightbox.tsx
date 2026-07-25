@@ -24,6 +24,19 @@ function Chevron({ dir }: { dir: "prev" | "next" }) {
   );
 }
 
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M6 6l12 12M18 6L6 18"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function PhotoLightbox({
   photos,
   src,
@@ -37,6 +50,11 @@ export function PhotoLightbox({
   useEffect(() => {
     if (!src) return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
       if (!canCycle) return;
       if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -93,6 +111,34 @@ export function PhotoLightbox({
         cursor: "pointer"
       }}
     >
+      <button
+        type="button"
+        aria-label="Close photo"
+        title="Close"
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        style={{
+          position: "absolute",
+          top: "max(12px, env(safe-area-inset-top, 0px))",
+          left: "max(12px, env(safe-area-inset-left, 0px))",
+          width: 40,
+          height: 40,
+          borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,0.28)",
+          background: "rgba(0,0,0,0.55)",
+          color: "#fff",
+          display: "grid",
+          placeItems: "center",
+          cursor: "pointer",
+          padding: 0,
+          zIndex: 2,
+          backdropFilter: "blur(4px)"
+        }}
+      >
+        <CloseIcon />
+      </button>
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
