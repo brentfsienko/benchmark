@@ -5,11 +5,24 @@ import { AuthProvider } from "@/src/contexts/auth-context";
 import { BottomNav } from "@/src/components/bottom-nav";
 
 export const metadata: Metadata = {
-  title: "benchmark web",
-  description: "mobile-first benchmark web app",
+  title: "Benchmark - have a seat",
+  description: "Find benches, leave benchmarks, and explore the city one seat at a time.",
+  applicationName: "Benchmark",
   icons: {
     icon: "/app-icon.png",
     apple: "/app-icon.png"
+  },
+  openGraph: {
+    title: "Benchmark - have a seat",
+    description: "Find benches, leave benchmarks, and explore the city one seat at a time.",
+    siteName: "Benchmark",
+    type: "website",
+    url: "https://benchmark.rest"
+  },
+  twitter: {
+    card: "summary",
+    title: "Benchmark - have a seat",
+    description: "Find benches, leave benchmarks, and explore the city one seat at a time."
   }
 };
 
