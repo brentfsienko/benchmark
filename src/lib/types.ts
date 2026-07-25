@@ -12,6 +12,14 @@ export type Bench = {
   latitude: number;
   longitude: number;
   tags: string[];
+  parkName?: string | null;
+  siteName?: string | null;
+  category?: string | null;
+  material?: string | null;
+  lengthFt?: number | null;
+  yearInstalled?: string | null;
+  donorPlaque?: string | null;
+  photoUrls?: string[];
 };
 
 export type BenchPin = {

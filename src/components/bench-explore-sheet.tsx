@@ -142,6 +142,9 @@ export function BenchExploreSheet({
   const description = bench?.description ?? "";
   const type = bench?.type ?? pin.type;
   const reviewCount = reviews.length;
+  const lengthFt = bench?.lengthFt ?? null;
+  const donorPlaque = bench?.donorPlaque ?? null;
+  const officialPhotos = bench?.photoUrls ?? [];
 
   const [mode, setMode] = useState<SheetMode>("overview");
   const [heightVh, setHeightVh] = useState(PEEK_VH);
@@ -171,6 +174,10 @@ export function BenchExploreSheet({
 
   const previewPhotos = useMemo(() => {
     const out: { src: string; author: string }[] = [];
+    for (const src of officialPhotos) {
+      out.push({ src, author: "Seattle Parks" });
+      if (out.length >= 8) return out;
+    }
     for (const review of reviews) {
       for (const src of review.photoBase64Items ?? []) {
         out.push({ src, author: review.author });
@@ -178,7 +185,7 @@ export function BenchExploreSheet({
       }
     }
     return out;
-  }, [reviews]);
+  }, [officialPhotos, reviews]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -572,6 +579,17 @@ export function BenchExploreSheet({
               ) : !loading ? (
                 <p className="muted" style={{ margin: "0 0 14px", fontSize: 13 }}>no description yet</p>
               ) : null}
+
+              {(lengthFt != null || donorPlaque) && (
+                <div style={{ margin: "0 0 14px", fontSize: 13, lineHeight: 1.45, color: "var(--text-secondary)" }}>
+                  {lengthFt != null && <p style={{ margin: 0 }}>{lengthFt} ft</p>}
+                  {donorPlaque && (
+                    <p style={{ margin: lengthFt != null ? "4px 0 0" : 0 }}>
+                      plaque: {donorPlaque}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {previewPhotos.length > 0 ? (
                 <div style={{ marginBottom: 16 }}>

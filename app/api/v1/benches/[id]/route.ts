@@ -17,7 +17,9 @@ export async function GET(
 
     const { data: benchRow, error } = await supabase
       .from("benches")
-      .select("id, name, neighborhood, bench_type, description, view_score, remoteness_score, popularity_score, average_rating")
+      .select(
+        "id, name, neighborhood, bench_type, description, view_score, remoteness_score, popularity_score, average_rating, park_name, site_name, category, material, length_ft, year_installed, donor_plaque, photo_urls"
+      )
       .eq("id", id)
       .single();
 
@@ -32,6 +34,9 @@ export async function GET(
     const lat = geomRow?.latitude ?? 0;
     const lng = geomRow?.longitude ?? 0;
     const tags = (tagRows ?? []).map((r: { tag: string }) => r.tag);
+    const photoUrls = Array.isArray(benchRow.photo_urls)
+      ? benchRow.photo_urls.map(String)
+      : [];
 
     const bench: Bench = {
       id: benchRow.id,
@@ -46,7 +51,15 @@ export async function GET(
       distanceMeters: 0,
       latitude: lat,
       longitude: lng,
-      tags
+      tags,
+      parkName: benchRow.park_name ?? null,
+      siteName: benchRow.site_name ?? null,
+      category: benchRow.category ?? null,
+      material: benchRow.material ?? null,
+      lengthFt: benchRow.length_ft == null ? null : Number(benchRow.length_ft),
+      yearInstalled: benchRow.year_installed ?? null,
+      donorPlaque: benchRow.donor_plaque ?? null,
+      photoUrls
     };
     return jsonData(bench);
   } catch (err) {

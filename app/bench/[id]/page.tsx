@@ -290,9 +290,12 @@ export default function BenchDetailPage() {
   const ratingEmoji = RATING_EMOJI[ratingKey] ?? "🪑";
   const fillPct = ((rating - 1) / 4) * 100;
 
-  const allPhotos = reviews.flatMap((r) =>
-    (r.photoBase64Items ?? []).map((src) => ({ src, author: r.author, rating: r.rating }))
-  );
+  const allPhotos = [
+    ...(bench?.photoUrls ?? []).map((src) => ({ src, author: "Seattle Parks", rating: 0 })),
+    ...reviews.flatMap((r) =>
+      (r.photoBase64Items ?? []).map((src) => ({ src, author: r.author, rating: r.rating }))
+    )
+  ];
 
   return (
     <section className="screen">
@@ -322,6 +325,13 @@ export default function BenchDetailPage() {
             </button>
           </div>
           <p style={{ marginTop: 8 }}>{bench.description}</p>
+          {(bench.lengthFt != null || bench.donorPlaque) && (
+            <p className="muted" style={{ marginTop: 6, fontSize: 13, lineHeight: 1.45 }}>
+              {bench.lengthFt != null ? `${bench.lengthFt} ft` : null}
+              {bench.lengthFt != null && bench.donorPlaque ? " · " : null}
+              {bench.donorPlaque ? `plaque: ${bench.donorPlaque}` : null}
+            </p>
+          )}
 
           <section className="surface-card" style={{ padding: 12, marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
