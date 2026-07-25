@@ -139,7 +139,8 @@ export function ExploreMap({
       map.on("moveend", () => emitBounds(map));
 
       const flyTo = (lat: number, lng: number) => {
-        map.flyTo([lat, lng], 16, { duration: 0.35 });
+        // Keep the user's zoom — never force a level that zooms them out.
+        map.flyTo([lat, lng], map.getZoom(), { duration: 0.35 });
       };
       onMapReady?.(flyTo);
 

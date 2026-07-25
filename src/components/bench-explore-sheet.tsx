@@ -26,6 +26,7 @@ import {
   optimizePhotoForUpload
 } from "@/src/lib/optimize-photo";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
+import { PhotoLightbox } from "@/src/components/photo-lightbox";
 
 type BenchExploreSheetProps = {
   pin: BenchPin;
@@ -172,27 +173,49 @@ export function BenchExploreSheet({
     });
   }, []);
 
-  const previewPhotos = useMemo(() => {
-    const out: { src: string; author: string }[] = [];
+  const galleryPhotos = useMemo(() => {
+    const out: string[] = [];
+    const seen = new Set<string>();
     for (const src of officialPhotos) {
-      out.push({ src, author: "Seattle Parks" });
-      if (out.length >= 8) return out;
+      if (!src || seen.has(src)) continue;
+      seen.add(src);
+      out.push(src);
     }
     for (const review of reviews) {
       for (const src of review.photoBase64Items ?? []) {
-        out.push({ src, author: review.author });
-        if (out.length >= 8) return out;
+        if (!src || seen.has(src)) continue;
+        seen.add(src);
+        out.push(src);
       }
     }
     return out;
   }, [officialPhotos, reviews]);
 
+  const previewPhotos = useMemo(
+    () =>
+      galleryPhotos.slice(0, 8).map((src) => ({
+        src,
+        author: officialPhotos.includes(src) ? "Seattle Parks" : "community"
+      })),
+    [galleryPhotos, officialPhotos]
+  );
+
+  const lightboxPhotos = useMemo(() => {
+    if (mode === "submit" && photos.length > 0 && selectedPhoto && photos.includes(selectedPhoto)) {
+      return photos;
+    }
+    return galleryPhotos;
+  }, [mode, photos, selectedPhoto, galleryPhotos]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (mode === "submit") setMode("overview");
-        else onClose();
+      if (e.key !== "Escape") return;
+      if (selectedPhoto) {
+        setSelectedPhoto(null);
+        return;
       }
+      if (mode === "submit") setMode("overview");
+      else onClose();
     };
     window.addEventListener("keydown", onKey);
     const prev = document.body.style.overflow;
@@ -201,7 +224,7 @@ export function BenchExploreSheet({
       window.removeEventListener("keydown", onKey);
       document.body.style.overflow = prev;
     };
-  }, [onClose, mode]);
+  }, [onClose, mode, selectedPhoto]);
 
   useEffect(() => {
     if (mode !== "submit" || !profileId || !bench) {
@@ -249,6 +272,9 @@ export function BenchExploreSheet({
 
   const onHandlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (mode === "submit") return;
+    // Don't start a sheet drag from header controls (back / delete).
+    const target = e.target as HTMLElement | null;
+    if (target?.closest("button, a, input, textarea, select, label")) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     setDragging(true);
     dragStartY.current = e.clientY;
@@ -459,7 +485,11 @@ export function BenchExploreSheet({
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
               type="button"
-              onClick={headerBack}
+              onClick={(e) => {
+                e.stopPropagation();
+                headerBack();
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
               aria-label={mode === "submit" ? "Back to bench overview" : "Back to map"}
               title={mode === "submit" ? "Back to bench" : "Back to map"}
               style={{
@@ -472,7 +502,10 @@ export function BenchExploreSheet({
                 background: "var(--elevated)",
                 color: "var(--text-primary)",
                 cursor: "pointer",
-                flexShrink: 0
+                flexShrink: 0,
+                touchAction: "manipulation",
+                position: "relative",
+                zIndex: 1
               }}
             >
               <BackIcon />
@@ -902,29 +935,13 @@ export function BenchExploreSheet({
         </div>
       </div>
 
-      {selectedPhoto && (
-        <div
-          onClick={() => setSelectedPhoto(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 30,
-            background: "rgba(0,0,0,0.85)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 20,
-            cursor: "pointer",
-            pointerEvents: "auto"
-          }}
-        >
-          <img
-            src={selectedPhoto}
-            alt="Full view"
-            style={{ maxWidth: "100%", maxHeight: "90vh", borderRadius: "var(--radius)", objectFit: "contain" }}
-          />
-        </div>
-      )}
+      <PhotoLightbox
+        photos={lightboxPhotos}
+        src={selectedPhoto}
+        onClose={() => setSelectedPhoto(null)}
+        onChange={setSelectedPhoto}
+        alt={`Photo of ${name}`}
+      />
     </div>
   );
 }
