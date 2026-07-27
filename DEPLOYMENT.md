@@ -31,7 +31,22 @@ Single deploy: Next.js (Vercel) + Supabase (Postgres). No separate backend.
    - `NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID` = `user-1` (optional)
 5. Deploy
 
-## 4. Local Development
+## 4. Make the app public (everyone can open it)
+
+Explore is already public in code — no invite list. Sign-in is only required for `/home` and for submitting benchmarks.
+
+If friends still hit a Vercel login / “Authentication Required” wall:
+
+1. Open the project on [vercel.com](https://vercel.com) → **Settings → Deployment Protection**
+2. Set **Production** (and Preview if you want) to **Disabled**, or add them under **Shareable Links / Allowed emails**
+3. Also check **Settings → Deployment Protection → Vercel Authentication** — turn it off for Production if you want a fully open URL
+4. Redeploy if the change doesn’t take effect immediately
+
+Optional: under **Domains**, use your custom domain as the share link so people aren’t on a protected `*.vercel.app` preview.
+
+Admin-only actions (add / move / rename / delete benches) stay limited to allowlisted emails in `src/lib/admin.ts`.
+
+## 5. Local Development
 
 ```bash
 cp .env.example .env.local

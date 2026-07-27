@@ -140,6 +140,16 @@ export function updateBenchLocation(benchID: string, latitude: number, longitude
   });
 }
 
+export function updateBench(
+  benchID: string,
+  patch: { name?: string; description?: string; neighborhood?: string }
+): Promise<Bench> {
+  return request<Bench>(`/benches/${benchID}`, {
+    method: "PATCH",
+    body: JSON.stringify(patch)
+  });
+}
+
 export function deleteBench(benchID: string): Promise<{ id: string; name: string; deleted: boolean }> {
   return request<{ id: string; name: string; deleted: boolean }>(`/benches/${benchID}`, {
     method: "DELETE"

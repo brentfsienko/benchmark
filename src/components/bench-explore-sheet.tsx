@@ -12,7 +12,7 @@ import {
   useRef,
   useState
 } from "react";
-import { listBenchReviews, submitBenchmark } from "@/src/lib/api";
+import { listBenchReviews, submitBenchmark, updateBench } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
 import {
@@ -37,6 +37,8 @@ type BenchExploreSheetProps = {
   onReviewsUpdated?: (reviews: BenchReview[]) => void;
   /** Admin-only: permanently remove this bench. */
   onDelete?: (benchId: string) => Promise<void> | void;
+  /** Admin-only: after name/description edits. */
+  onBenchUpdated?: (bench: Bench) => void;
   onToast?: (message: string) => void;
 };
 
@@ -107,6 +109,15 @@ function TrashIcon() {
   );
 }
 
+function PencilIcon() {
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
 function readCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -133,6 +144,7 @@ export function BenchExploreSheet({
   onClose,
   onReviewsUpdated,
   onDelete,
+  onBenchUpdated,
   onToast
 }: BenchExploreSheetProps) {
   const { profileId, isAdmin } = useAuth();
@@ -163,6 +175,17 @@ export function BenchExploreSheet({
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [expandedReviewIds, setExpandedReviewIds] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(name);
+  const [editDescription, setEditDescription] = useState(description);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  useEffect(() => {
+    setEditing(false);
+    setEditName(name);
+    setEditDescription(description);
+    setStatus(null);
+  }, [pin.id, name, description]);
 
   const toggleReviewExpanded = useCallback((reviewId: string) => {
     setExpandedReviewIds((prev) => {
@@ -414,6 +437,47 @@ export function BenchExploreSheet({
     }
   };
 
+  const startEditing = () => {
+    setEditName(name);
+    setEditDescription(description);
+    setEditing(true);
+    setStatus(null);
+    setHeightVh(Math.max(heightVh, EXPANDED_VH));
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditName(name);
+    setEditDescription(description);
+    setStatus(null);
+  };
+
+  const handleSaveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin || savingEdit) return;
+    const nextName = editName.trim();
+    if (nextName.length < 2) {
+      setStatus("name must be at least 2 characters");
+      return;
+    }
+    setSavingEdit(true);
+    setStatus(null);
+    try {
+      const updated = await updateBench(pin.id, {
+        name: nextName,
+        description: editDescription.trim()
+      });
+      onBenchUpdated?.(updated);
+      trackEvent({ name: "bench_updated", benchId: pin.id, userId: profileId ?? undefined });
+      setEditing(false);
+      onToast?.("bench updated");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "unable to update bench");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -527,32 +591,59 @@ export function BenchExploreSheet({
                 <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>{name}</p>
               ) : null}
             </div>
-            {isAdmin && onDelete && mode === "overview" ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void handleDelete();
-                }}
-                disabled={deleting}
-                aria-label="Delete bench"
-                title="Delete bench"
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: "50%",
-                  display: "grid",
-                  placeItems: "center",
-                  border: "1px solid var(--border)",
-                  background: "var(--elevated)",
-                  color: "var(--danger)",
-                  cursor: deleting ? "wait" : "pointer",
-                  flexShrink: 0,
-                  opacity: deleting ? 0.6 : 1
-                }}
-              >
-                <TrashIcon />
-              </button>
+            {isAdmin && mode === "overview" ? (
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (editing) cancelEditing();
+                    else startEditing();
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  aria-label={editing ? "Cancel edit" : "Edit bench"}
+                  title={editing ? "Cancel edit" : "Edit bench"}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: "50%",
+                    display: "grid",
+                    placeItems: "center",
+                    border: "1px solid var(--border)",
+                    background: "var(--elevated)",
+                    color: "var(--text-primary)",
+                    cursor: "pointer"
+                  }}
+                >
+                  <PencilIcon />
+                </button>
+                {onDelete ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void handleDelete();
+                    }}
+                    disabled={deleting || editing}
+                    aria-label="Delete bench"
+                    title="Delete bench"
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: "50%",
+                      display: "grid",
+                      placeItems: "center",
+                      border: "1px solid var(--border)",
+                      background: "var(--elevated)",
+                      color: "var(--danger)",
+                      cursor: deleting ? "wait" : "pointer",
+                      opacity: deleting || editing ? 0.6 : 1
+                    }}
+                  >
+                    <TrashIcon />
+                  </button>
+                ) : null}
+              </div>
             ) : null}
           </div>
           {status && mode === "overview" ? (
@@ -607,7 +698,49 @@ export function BenchExploreSheet({
                 <p className="muted" style={{ margin: "0 0 12px", fontSize: 13 }}>loading details…</p>
               ) : null}
 
-              {description ? (
+              {editing && isAdmin ? (
+                <form onSubmit={handleSaveEdit} style={{ display: "grid", gap: 12, marginBottom: 16 }}>
+                  <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                    name
+                    <input
+                      value={editName}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
+                      required
+                      maxLength={120}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+                    description
+                    <textarea
+                      value={editDescription}
+                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setEditDescription(e.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      style={{ width: "100%" }}
+                    />
+                  </label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="submit" className="button-primary" disabled={savingEdit} style={{ flex: 1 }}>
+                      {savingEdit ? "saving…" : "save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEditing}
+                      disabled={savingEdit}
+                      style={{
+                        flex: 1,
+                        borderRadius: "var(--radius)",
+                        border: "1px solid var(--border)",
+                        background: "var(--elevated)",
+                        cursor: "pointer"
+                      }}
+                    >
+                      cancel
+                    </button>
+                  </div>
+                </form>
+              ) : description ? (
                 <p style={{ margin: "0 0 14px", fontSize: 14, lineHeight: 1.45 }}>{description}</p>
               ) : !loading ? (
                 <p className="muted" style={{ margin: "0 0 14px", fontSize: 13 }}>no description yet</p>

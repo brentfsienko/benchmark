@@ -368,6 +368,37 @@ export default function ExplorePage() {
     }
   }, [refresh, showToast]);
 
+  const handleBenchUpdated = useCallback((updated: Bench) => {
+    const prevPin = pinCacheRef.current.get(updated.id);
+    const nextPin: BenchPin = {
+      id: updated.id,
+      name: updated.name,
+      neighborhood: updated.neighborhood,
+      type: updated.type,
+      averageRating: updated.averageRating,
+      latitude: updated.latitude || prevPin?.latitude || 0,
+      longitude: updated.longitude || prevPin?.longitude || 0,
+      reviewCount: prevPin?.reviewCount ?? 0
+    };
+    pinCacheRef.current.set(updated.id, nextPin);
+    setBenches((prev) => prev.map((b) => (b.id === updated.id ? { ...b, ...nextPin } : b)));
+    setSheetPin((prev) => (prev?.id === updated.id ? { ...prev, ...nextPin } : prev));
+    const detail = detailCacheRef.current.get(updated.id);
+    if (detail) {
+      detailCacheRef.current.set(updated.id, {
+        ...detail,
+        bench: { ...detail.bench, ...updated, latitude: nextPin.latitude, longitude: nextPin.longitude }
+      });
+    } else {
+      detailCacheRef.current.set(updated.id, {
+        bench: { ...updated, latitude: nextPin.latitude, longitude: nextPin.longitude },
+        reviews: [],
+        fetchedWithPhotos: false
+      });
+    }
+    setDetailVersion((v) => v + 1);
+  }, []);
+
   useEffect(() => {
     const el = carouselRef.current;
     if (!el) return;
@@ -1159,6 +1190,7 @@ export default function ExplorePage() {
           onClose={closeBenchSheet}
           onReviewsUpdated={handleSheetReviewsUpdated}
           onDelete={isAdmin ? handleDeleteBench : undefined}
+          onBenchUpdated={isAdmin ? handleBenchUpdated : undefined}
           onToast={showToast}
         />
       )}

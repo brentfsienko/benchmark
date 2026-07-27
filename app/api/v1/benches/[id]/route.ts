@@ -81,20 +81,58 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const latitude = Number(body.latitude);
-    const longitude = Number(body.longitude);
-    if (latitude < -90 || latitude > 90) return jsonError("Latitude must be between -90 and 90", "validation_error", 422);
-    if (longitude < -180 || longitude > 180) return jsonError("Longitude must be between -180 and 180", "validation_error", 422);
+    const hasLat = body.latitude !== undefined && body.latitude !== null && body.latitude !== "";
+    const hasLng = body.longitude !== undefined && body.longitude !== null && body.longitude !== "";
+    const name =
+      typeof body.name === "string" ? body.name.trim().slice(0, 120) : undefined;
+    const description =
+      typeof body.description === "string" ? body.description.trim().slice(0, 2000) : undefined;
+    const neighborhood =
+      typeof body.neighborhood === "string" ? body.neighborhood.trim().slice(0, 80) : undefined;
+
+    const moving = hasLat || hasLng;
+    const editingMeta =
+      name !== undefined || description !== undefined || neighborhood !== undefined;
+
+    if (!moving && !editingMeta) {
+      return jsonError("No updates provided", "validation_error", 422);
+    }
 
     const supabase = createSupabaseServer();
-    const { error: updateErr } = await supabase.rpc("update_bench_coords", {
-      p_id: id,
-      p_lat: latitude,
-      p_lng: longitude
-    });
-    if (updateErr) {
-      console.error("update_bench_coords error:", updateErr);
-      return jsonError("Unable to move bench pin", "internal_error", 500);
+
+    if (moving) {
+      const latitude = Number(body.latitude);
+      const longitude = Number(body.longitude);
+      if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
+        return jsonError("Latitude must be between -90 and 90", "validation_error", 422);
+      }
+      if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
+        return jsonError("Longitude must be between -180 and 180", "validation_error", 422);
+      }
+      const { error: updateErr } = await supabase.rpc("update_bench_coords", {
+        p_id: id,
+        p_lat: latitude,
+        p_lng: longitude
+      });
+      if (updateErr) {
+        console.error("update_bench_coords error:", updateErr);
+        return jsonError("Unable to move bench pin", "internal_error", 500);
+      }
+    }
+
+    if (editingMeta) {
+      if (name !== undefined && name.length < 2) {
+        return jsonError("Name must be at least 2 characters", "validation_error", 422);
+      }
+      const patch: Record<string, string> = {};
+      if (name !== undefined) patch.name = name;
+      if (description !== undefined) patch.description = description;
+      if (neighborhood !== undefined) patch.neighborhood = neighborhood;
+      const { error: metaErr } = await supabase.from("benches").update(patch).eq("id", id);
+      if (metaErr) {
+        console.error("benches meta update error:", metaErr);
+        return jsonError("Unable to update bench", "internal_error", 500);
+      }
     }
 
     const { data: benchRow, error } = await supabase
@@ -120,8 +158,8 @@ export async function PATCH(
       popularityScore: Number(benchRow.popularity_score),
       averageRating: Number(benchRow.average_rating),
       distanceMeters: 0,
-      latitude: Number(geomRow?.latitude ?? latitude),
-      longitude: Number(geomRow?.longitude ?? longitude),
+      latitude: Number(geomRow?.latitude ?? body.latitude ?? 0),
+      longitude: Number(geomRow?.longitude ?? body.longitude ?? 0),
       tags: (tagRows ?? []).map((r: { tag: string }) => r.tag)
     };
     return jsonData(bench);
