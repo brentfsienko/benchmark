@@ -44,6 +44,48 @@ export function writeSavedMapView(lat: number, lng: number, zoom: number) {
   }
 }
 
+/** Wrap longitude into [-180, 180]. */
+export function normalizeLng(lng: number): number {
+  if (!Number.isFinite(lng)) return 0;
+  let x = lng;
+  while (x > 180) x -= 360;
+  while (x < -180) x += 360;
+  return x;
+}
+
+/**
+ * Leaflet (esp. worldCopyJump / low zoom) can emit lng outside ±180.
+ * Keep a valid API bbox; allow antimeridian (sw_lng > ne_lng).
+ */
+export function normalizeViewportBounds(bounds: ViewportBoundsLike): ViewportBoundsLike {
+  const sw_lat = Math.max(-90, Math.min(90, bounds.sw_lat));
+  const ne_lat = Math.max(-90, Math.min(90, bounds.ne_lat));
+  const sw_lng = bounds.sw_lng;
+  const ne_lng = bounds.ne_lng;
+
+  const rawSpan = ne_lng - sw_lng;
+  const wrappedSpan = sw_lng <= ne_lng ? rawSpan : 360 - (sw_lng - ne_lng);
+  if (rawSpan >= 359 || wrappedSpan >= 359 || Math.abs(sw_lng) > 180 || Math.abs(ne_lng) > 180) {
+    if (rawSpan >= 359 || wrappedSpan >= 359) {
+      return {
+        sw_lat: Math.min(sw_lat, ne_lat),
+        ne_lat: Math.max(sw_lat, ne_lat),
+        sw_lng: -180,
+        ne_lng: 180,
+        zoom: bounds.zoom
+      };
+    }
+  }
+
+  return {
+    sw_lat: Math.min(sw_lat, ne_lat),
+    ne_lat: Math.max(sw_lat, ne_lat),
+    sw_lng: normalizeLng(sw_lng),
+    ne_lng: normalizeLng(ne_lng),
+    zoom: bounds.zoom
+  };
+}
+
 /**
  * Approximate Leaflet viewport around a point without waiting for the map.
  * Good enough to prefetch pins while GPS / Leaflet race.
@@ -54,13 +96,25 @@ export function viewportAround(lat: number, lng: number, zoom: number): Viewport
   const viewW = typeof window !== "undefined" ? Math.min(Math.max(window.innerWidth, 320), 1400) : 390;
   const viewH =
     typeof window !== "undefined" ? Math.min(Math.max(window.innerHeight * 0.55, 280), 900) : 520;
-  const lngSpan = (viewW / worldPx) * 360;
-  const latSpan = (viewH / worldPx) * 360;
-  return {
+  const lngSpan = Math.min((viewW / worldPx) * 360, 360);
+  const latSpan = Math.min((viewH / worldPx) * 360, 170);
+
+  if (lngSpan >= 359) {
+    return {
+      sw_lat: Math.max(-85, lat - latSpan / 2),
+      ne_lat: Math.min(85, lat + latSpan / 2),
+      sw_lng: -180,
+      ne_lng: 180,
+      zoom: z
+    };
+  }
+
+  const centerLng = normalizeLng(lng);
+  return normalizeViewportBounds({
     sw_lat: Math.max(-85, lat - latSpan / 2),
     ne_lat: Math.min(85, lat + latSpan / 2),
-    sw_lng: lng - lngSpan / 2,
-    ne_lng: lng + lngSpan / 2,
+    sw_lng: centerLng - lngSpan / 2,
+    ne_lng: centerLng + lngSpan / 2,
     zoom: z
-  };
+  });
 }

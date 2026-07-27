@@ -10,6 +10,7 @@ import {
   NEARBY_ZOOM,
   WORLD_MAP_CENTER,
   WORLD_ZOOM,
+  normalizeViewportBounds,
   readSavedMapView,
   writeSavedMapView,
   type SavedMapView
@@ -122,13 +123,14 @@ export function ExploreMap({
 
   const pushBounds = useCallback((map: LeafletMap) => {
     const b = map.getBounds();
-    onBoundsChangeRef.current?.({
+    const normalized = normalizeViewportBounds({
       sw_lat: b.getSouthWest().lat,
       sw_lng: b.getSouthWest().lng,
       ne_lat: b.getNorthEast().lat,
       ne_lng: b.getNorthEast().lng,
       zoom: map.getZoom()
     });
+    onBoundsChangeRef.current?.(normalized);
   }, []);
 
   /** Immediate emit for first paint; debounced emit for pan/zoom. */
