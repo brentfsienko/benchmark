@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Map, Marker, MarkerClusterGroup } from "leaflet";
+import type { Map as LeafletMap, Marker, MarkerClusterGroup } from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
@@ -84,9 +84,18 @@ export function ExploreMap({
   centerOnUserOnLoad = true
 }: ExploreMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<Map | null>(null);
+  const mapInstanceRef = useRef<LeafletMap | null>(null);
   const clusterGroupRef = useRef<MarkerClusterGroup | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  const markersByIdRef = useRef<globalThis.Map<string, Marker>>(new globalThis.Map());
+  const benchesRef = useRef(benches);
+  benchesRef.current = benches;
+  const selectedBenchIDRef = useRef(selectedBenchID);
+  selectedBenchIDRef.current = selectedBenchID;
+  const onSelectBenchRef = useRef(onSelectBench);
+  onSelectBenchRef.current = onSelectBench;
+  const onMapClickRef = useRef(onMapClick);
+  onMapClickRef.current = onMapClick;
   const tempMarkerRef = useRef<Marker | null>(null);
   const vpMarkerRef = useRef<Marker | null>(null);
   const userMarkerRef = useRef<Marker | null>(null);
@@ -97,7 +106,7 @@ export function ExploreMap({
   const [mounted, setMounted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
 
-  const emitBounds = useCallback((map: Map) => {
+  const emitBounds = useCallback((map: LeafletMap) => {
     if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
     boundsTimerRef.current = setTimeout(() => {
       const b = map.getBounds();
@@ -165,7 +174,6 @@ export function ExploreMap({
       mapInstanceRef.current = map;
       setMapReady(true);
 
-      emitBounds(map);
       map.on("moveend", () => emitBounds(map));
 
       const flyTo = (lat: number, lng: number) => {
@@ -179,6 +187,7 @@ export function ExploreMap({
       };
       onMapReady?.(flyTo);
 
+      // One initial bounds fetch: wait briefly for GPS, then settle (avoids Green Lake + user double-load).
       if (centerOnUserOnLoad && "geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -187,10 +196,12 @@ export function ExploreMap({
             emitBounds(map);
           },
           () => {
-            // Keep Green Lake fallback if permission denied / timeout.
+            emitBounds(map);
           },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 60_000 }
+          { enableHighAccuracy: false, timeout: 2500, maximumAge: 120_000 }
         );
+      } else {
+        emitBounds(map);
       }
     });
 
@@ -334,12 +345,14 @@ export function ExploreMap({
 
       cluster.clearLayers();
       markersRef.current = [];
+      markersByIdRef.current.clear();
 
       const bmSet = new Set(benchmarkedBenchIDs);
+      const selected = selectedBenchIDRef.current;
       const markers: Marker[] = [];
 
       benches.forEach((bench) => {
-        const isSelected = !addMode && bench.id === selectedBenchID;
+        const isSelected = !addMode && bench.id === selected;
         const isBenchmarked = bmSet.has(bench.id);
         const size = isSelected ? 32 : 24;
         const icon = L.default.divIcon({
@@ -351,19 +364,43 @@ export function ExploreMap({
 
         const marker = L.default.marker([bench.latitude, bench.longitude], { icon });
         marker.on("click", () => {
-          if (addMode && onMapClick) {
-            onMapClick(bench.latitude, bench.longitude);
+          const current = benchesRef.current.find((b) => b.id === bench.id) ?? bench;
+          if (addMode && onMapClickRef.current) {
+            onMapClickRef.current(current.latitude, current.longitude);
           } else {
-            onSelectBench(bench);
+            onSelectBenchRef.current(current);
           }
         });
         markers.push(marker);
+        markersByIdRef.current.set(bench.id, marker);
       });
 
       cluster.addLayers(markers);
       markersRef.current = markers;
     });
-  }, [mounted, mapReady, benches, selectedBenchID, onSelectBench, addMode, onMapClick, benchmarkedBenchIDs]);
+    // Intentionally omit selectedBenchID — selection is a cheap icon refresh below.
+  }, [mounted, mapReady, benches, addMode, benchmarkedBenchIDs]);
+
+  // Restyle only the previous + current selection without rebuilding the cluster.
+  useEffect(() => {
+    if (!mounted || !mapInstanceRef.current) return;
+    void import("leaflet").then((L) => {
+      const bmSet = new Set(benchmarkedBenchIDs);
+      markersByIdRef.current.forEach((marker: Marker, id: string) => {
+        const isSelected = !addMode && id === selectedBenchID;
+        const isBenchmarked = bmSet.has(id);
+        const size = isSelected ? 32 : 24;
+        marker.setIcon(
+          L.default.divIcon({
+            className: "bench-pin",
+            html: benchPinSvg(isSelected, isBenchmarked),
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size]
+          })
+        );
+      });
+    });
+  }, [mounted, mapReady, selectedBenchID, addMode, benchmarkedBenchIDs]);
 
   if (!mounted) {
     return (

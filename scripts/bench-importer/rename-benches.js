@@ -35,116 +35,94 @@ const EARTH_M = 6_371_000;
  */
 const CLUSTER_METERS = 12;
 
-/** Hand-tuned landmark zones for the busiest parks (lat,lng,radiusM,label). */
+/**
+ * Hand-tuned landmark zones (lat,lng,radiusM,label).
+ * Radii are intentionally tight (~45–90m) so POI names only apply when the bench
+ * is actually near that feature — not anywhere in the same park.
+ */
 const PARK_LANDMARKS = {
   "Green Lake": [
-    { lat: 47.6762, lng: -122.3345, r: 220, label: "South Duck Pond" },
-    { lat: 47.6848, lng: -122.3370, r: 220, label: "North Beach" }
+    { lat: 47.6762, lng: -122.3345, r: 70, label: "South Duck Pond" },
+    { lat: 47.6848, lng: -122.3370, r: 70, label: "North Beach" }
   ],
   "Alki Beach Park": [
-    { lat: 47.5782, lng: -122.4145, r: 320, label: "Alki Point Reach" },
-    { lat: 47.5805, lng: -122.4075, r: 280, label: "Statue of Liberty Shore" },
-    { lat: 47.5852, lng: -122.3995, r: 300, label: "Mid Beach Promenade" },
-    { lat: 47.5915, lng: -122.3935, r: 300, label: "Don Armeni Outlook" },
-    { lat: 47.5948, lng: -122.3885, r: 280, label: "Harbor Ave Shore" }
+    { lat: 47.5768, lng: -122.4188, r: 80, label: "Alki Point" },
+    { lat: 47.5805, lng: -122.4075, r: 70, label: "Statue of Liberty" },
+    { lat: 47.5915, lng: -122.3935, r: 80, label: "Don Armeni Boat Ramp" }
   ],
   "Lincoln Park": [
-    { lat: 47.5275, lng: -122.3965, r: 280, label: "South Beach Stairs" },
-    { lat: 47.5295, lng: -122.3995, r: 260, label: "Colman Pool Bluff" },
-    { lat: 47.5315, lng: -122.4005, r: 250, label: "West Bluff Trail" },
-    { lat: 47.5345, lng: -122.3945, r: 260, label: "Forest Loop Clearing" },
-    { lat: 47.5362, lng: -122.3962, r: 240, label: "North Entrance Grove" }
+    { lat: 47.5295, lng: -122.3995, r: 75, label: "Colman Pool" },
+    { lat: 47.5275, lng: -122.3965, r: 70, label: "South Beach Stairs" },
+    { lat: 47.5362, lng: -122.3962, r: 70, label: "North Entrance" }
   ],
   "Cal Anderson Park": [
-    { lat: 47.6173, lng: -122.3193, r: 90, label: "Reflecting Pool" },
-    { lat: 47.6182, lng: -122.3190, r: 90, label: "Shelter House Lawn" },
-    { lat: 47.6160, lng: -122.3195, r: 100, label: "South Playfield Edge" },
-    { lat: 47.6156, lng: -122.3188, r: 90, label: "Pine Street Corner" },
-    { lat: 47.6178, lng: -122.3196, r: 80, label: "Broadway Terrace" }
+    { lat: 47.6173, lng: -122.3193, r: 55, label: "Reflecting Pool" },
+    { lat: 47.6182, lng: -122.3190, r: 55, label: "Shelter House" },
+    { lat: 47.6156, lng: -122.3188, r: 55, label: "Pine Street Corner" },
+    { lat: 47.6178, lng: -122.3196, r: 50, label: "Broadway Terrace" }
   ],
   "Green Lake Park": [
-    { lat: 47.6762, lng: -122.3345, r: 220, label: "South Duck Pond" },
-    { lat: 47.6802, lng: -122.3270, r: 220, label: "East Shore Path" },
-    { lat: 47.6828, lng: -122.3348, r: 220, label: "Bathhouse Lawn" },
-    { lat: 47.6848, lng: -122.3370, r: 220, label: "North Beach" },
-    { lat: 47.6805, lng: -122.3425, r: 220, label: "West Shore Sunset" },
-    { lat: 47.6780, lng: -122.3385, r: 200, label: "Community Center Meadow" }
+    { lat: 47.6762, lng: -122.3345, r: 70, label: "South Duck Pond" },
+    { lat: 47.6828, lng: -122.3348, r: 75, label: "Bathhouse Theater" },
+    { lat: 47.6848, lng: -122.3370, r: 70, label: "North Beach" },
+    { lat: 47.6780, lng: -122.3385, r: 70, label: "Community Center" },
+    { lat: 47.6805, lng: -122.3425, r: 65, label: "West Shore" }
   ],
   "Warren G. Magnuson Park": [
-    { lat: 47.6805, lng: -122.2518, r: 280, label: "Promontory Point" },
-    { lat: 47.6828, lng: -122.2485, r: 250, label: "Boat Launch Cove" },
-    { lat: 47.6775, lng: -122.2555, r: 250, label: "Wetland Trails" },
-    { lat: 47.6845, lng: -122.2568, r: 220, label: "Sports Meadow" },
-    { lat: 47.6792, lng: -122.2468, r: 220, label: "Lake Shore Path" }
+    { lat: 47.6805, lng: -122.2518, r: 80, label: "Promontory Point" },
+    { lat: 47.6828, lng: -122.2485, r: 75, label: "Boat Launch" },
+    { lat: 47.6775, lng: -122.2555, r: 80, label: "Wetland Trails" }
   ],
   "Washington Park and Arboretum": [
-    { lat: 47.6398, lng: -122.2945, r: 220, label: "Japanese Garden Gate" },
-    { lat: 47.6392, lng: -122.2968, r: 200, label: "Azalea Way" },
-    { lat: 47.6435, lng: -122.2935, r: 220, label: "Foster Island Marsh" },
-    { lat: 47.6375, lng: -122.2985, r: 200, label: "Graham Visitors Center" },
-    { lat: 47.6412, lng: -122.2918, r: 200, label: "Waterfront Trail" }
+    { lat: 47.6398, lng: -122.2945, r: 70, label: "Japanese Garden" },
+    { lat: 47.6392, lng: -122.2968, r: 65, label: "Azalea Way" },
+    { lat: 47.6435, lng: -122.2935, r: 75, label: "Foster Island" },
+    { lat: 47.6375, lng: -122.2985, r: 70, label: "Graham Visitors Center" }
   ],
   "Seward Park": [
-    { lat: 47.5555, lng: -122.2505, r: 250, label: "Peninsula Tip" },
-    { lat: 47.5508, lng: -122.2528, r: 220, label: "South Beach" },
-    { lat: 47.5588, lng: -122.2535, r: 220, label: "Andrews Bay Shore" },
-    { lat: 47.5542, lng: -122.2565, r: 200, label: "Old Growth Loop" }
+    { lat: 47.5555, lng: -122.2505, r: 80, label: "Peninsula Tip" },
+    { lat: 47.5508, lng: -122.2528, r: 75, label: "South Beach" },
+    { lat: 47.5588, lng: -122.2535, r: 75, label: "Andrews Bay" }
   ],
   "Golden Gardens Park": [
-    { lat: 47.6918, lng: -122.4035, r: 250, label: "North Beach Fire Pits" },
-    { lat: 47.6885, lng: -122.4028, r: 220, label: "Bathhouse Cove" },
-    { lat: 47.6865, lng: -122.4015, r: 200, label: "Train Tracks Overlook" },
-    { lat: 47.6935, lng: -122.4022, r: 200, label: "Sand Spit" }
+    { lat: 47.6918, lng: -122.4035, r: 75, label: "North Beach Fire Pits" },
+    { lat: 47.6885, lng: -122.4028, r: 70, label: "Bathhouse" },
+    { lat: 47.6935, lng: -122.4022, r: 70, label: "Sand Spit" }
   ],
   "Volunteer Park": [
-    { lat: 47.6302, lng: -122.3148, r: 150, label: "Conservatory Lawn" },
-    { lat: 47.6315, lng: -122.3155, r: 140, label: "Water Tower Loop" },
-    { lat: 47.6295, lng: -122.3135, r: 140, label: "Asian Art Museum Approach" },
-    { lat: 47.6288, lng: -122.3158, r: 140, label: "Amphitheater Edge" },
-    { lat: 47.6308, lng: -122.3165, r: 130, label: "Dahlia Garden" }
+    { lat: 47.6302, lng: -122.3148, r: 60, label: "Conservatory" },
+    { lat: 47.6315, lng: -122.3155, r: 60, label: "Water Tower" },
+    { lat: 47.6295, lng: -122.3135, r: 60, label: "Asian Art Museum" },
+    { lat: 47.6288, lng: -122.3158, r: 55, label: "Amphitheater" },
+    { lat: 47.6308, lng: -122.3165, r: 50, label: "Dahlia Garden" }
   ],
   "Lake Union Park": [
-    { lat: 47.6275, lng: -122.3378, r: 180, label: "Center for Wooden Boats" },
-    { lat: 47.6288, lng: -122.3395, r: 160, label: "MOHAI Plaza" },
-    { lat: 47.6268, lng: -122.3365, r: 160, label: "South Lake Union Shore" }
+    { lat: 47.6275, lng: -122.3378, r: 65, label: "Center for Wooden Boats" },
+    { lat: 47.6288, lng: -122.3395, r: 60, label: "MOHAI" }
   ],
   "Kerry Park and Viewpoint": [
-    { lat: 47.6295, lng: -122.3598, r: 120, label: "Skyline Overlook" },
-    { lat: 47.6298, lng: -122.3605, r: 100, label: "Franklin Place Vista" }
-  ],
-  "Lake Washington Boulevard": [
-    { lat: 47.58, lng: -122.285, r: 400, label: "Lake Washington Shore" },
-    { lat: 47.56, lng: -122.27, r: 400, label: "Boulevard Bluff" }
+    { lat: 47.6295, lng: -122.3598, r: 55, label: "Skyline Overlook" }
   ],
   "Gas Works Park": [
-    { lat: 47.6458, lng: -122.3355, r: 180, label: "Kite Hill" },
-    { lat: 47.6452, lng: -122.3368, r: 150, label: "Exhauster Building Lawn" },
-    { lat: 47.6465, lng: -122.3342, r: 150, label: "Lake Union Shore" }
+    { lat: 47.6458, lng: -122.3355, r: 70, label: "Kite Hill" },
+    { lat: 47.6452, lng: -122.3368, r: 60, label: "Exhauster Building" },
+    { lat: 47.6465, lng: -122.3342, r: 60, label: "Lake Union Shore" }
   ],
   "Discovery Park": [
-    { lat: 47.6615, lng: -122.4185, r: 300, label: "West Point Lighthouse" },
-    { lat: 47.6578, lng: -122.4255, r: 280, label: "South Beach" },
-    { lat: 47.6655, lng: -122.4215, r: 250, label: "North Bluff" },
-    { lat: 47.66, lng: -122.41, r: 250, label: "Parade Ground Loop" }
+    { lat: 47.6615, lng: -122.4185, r: 80, label: "West Point Lighthouse" },
+    { lat: 47.6578, lng: -122.4255, r: 80, label: "South Beach" },
+    { lat: 47.66, lng: -122.41, r: 75, label: "Parade Ground" }
   ],
   "Myrtle Edwards Park": [
-    { lat: 47.6185, lng: -122.3605, r: 200, label: "Olympic Sculpture Park Edge" },
-    { lat: 47.6225, lng: -122.3645, r: 220, label: "Elliott Bay Path" }
+    { lat: 47.6185, lng: -122.3605, r: 70, label: "Sculpture Park Edge" }
   ],
   "Carkeek Park": [
-    { lat: 47.7125, lng: -122.3775, r: 250, label: "Piper's Creek" },
-    { lat: 47.7118, lng: -122.3815, r: 220, label: "Railroad Bridge Beach" },
-    { lat: 47.7145, lng: -122.3755, r: 200, label: "Grand Fir Trail" }
-  ],
-  "Burke-Gilman Trail": [
-    { lat: 47.66, lng: -122.3, r: 800, label: "Trail Corridor" }
-  ],
-  "Magnolia Boulevard": [
-    { lat: 47.64, lng: -122.41, r: 500, label: "Puget Sound Overlook" }
+    { lat: 47.7125, lng: -122.3775, r: 75, label: "Piper's Creek" },
+    { lat: 47.7118, lng: -122.3815, r: 70, label: "Railroad Bridge Beach" }
   ],
   "Victor Steinbrueck Park": [
-    { lat: 47.6095, lng: -122.3425, r: 100, label: "Pike Place Overlook" },
-    { lat: 47.6098, lng: -122.3432, r: 90, label: "Elliott Bay Totems" }
+    { lat: 47.6095, lng: -122.3425, r: 50, label: "Pike Place Overlook" },
+    { lat: 47.6098, lng: -122.3432, r: 45, label: "Elliott Bay Totems" }
   ]
 };
 
@@ -240,12 +218,27 @@ function siteQualifier(bench, park) {
   const site = (bench.siteName || "").trim();
   if (!site) return null;
   if (site.toLowerCase() === (park || "").toLowerCase()) return null;
+
+  const short = shortPark(park);
+  // Prefer parenthetical locality: "Kerry Park (Franklin Place)" → "Franklin Place"
+  const paren = site.match(/\(([^)]+)\)\s*$/);
+  if (paren) {
+    const inner = paren[1].trim();
+    if (inner.length >= 3 && inner.length <= 36 && !/^park$/i.test(inner)) return inner;
+  }
+
   let q = site
     .replace(new RegExp(`^${(park || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "")
+    .replace(new RegExp(`^${short.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*(park)?\\s*`, "i"), "")
     .replace(/^\(|\)$/g, "")
+    .replace(/^[-–—]\s*/, "")
     .trim();
-  if (q.length < 3 || q.length > 40) return null;
+  if (q.length < 3 || q.length > 36) return null;
   if (/^park$/i.test(q)) return null;
+  // Skip material/category leftovers from GIS.
+  if (/wood|metal|standard|approved|concrete|composite/i.test(q)) return null;
+  const qLower = q.toLowerCase();
+  if (qLower === short.toLowerCase() || qLower.includes(short.toLowerCase())) return null;
   return q;
 }
 
@@ -275,30 +268,28 @@ function bandLabel(group, bench) {
 function buildBaseName(bench, parkCentroid, group) {
   const park = bench.parkName || bench.siteName || "Seattle";
   const short = shortPark(park);
+  // Only accept a POI label when the bench is inside that landmark's tight radius.
   const landmark = nearestLandmark(bench, park);
   const site = siteQualifier(bench, park);
   const bearing = bearingDeg(parkCentroid, { lat: bench.latitude, lng: bench.longitude });
   const dir = cardinal(bearing);
-  const setting = settingFromText(park, site, landmark?.label, bench.category);
   const band = bandLabel(group, bench);
 
   if (landmark) {
     const label = landmark.label;
-    if (/\b(shore|path|trail|lawn|loop|plaza|cove|bluff|overlook|garden|pond|beach|reach|promenade|terrace|corner|meadow|grove|clearing)\b/i.test(label)) {
-      return `${label} Bench`;
-    }
-    return `${label} ${setting === "path" ? "" : setting + " "}Bench`.replace(/\s+/g, " ").trim();
+    if (/\bBench\b/i.test(label)) return label;
+    return `${label} Bench`;
   }
 
   if (site) {
-    return `${site} ${dir} ${setting} Bench`.replace(/\s+/g, " ").trim();
+    return `${short} ${site} Bench`;
   }
 
   if (band) {
-    return `${short} ${band} ${setting} Bench`.replace(/\s+/g, " ").trim();
+    return `${short} ${titleCaseWords(band)} Bench`;
   }
 
-  return `${short} ${dir} ${setting} Bench`.replace(/\s+/g, " ").trim();
+  return `${short} ${titleCaseWords(dir)} Bench`;
 }
 
 function normalizeBase(base) {

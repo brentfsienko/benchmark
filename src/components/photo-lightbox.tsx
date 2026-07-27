@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 
 type PhotoLightboxProps = {
   photos: string[];
@@ -12,7 +13,7 @@ type PhotoLightboxProps = {
 
 function Chevron({ dir }: { dir: "prev" | "next" }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
       <path
         d={dir === "prev" ? "M15 6l-6 6 6 6" : "M9 6l6 6-6 6"}
         stroke="currentColor"
@@ -44,11 +45,18 @@ export function PhotoLightbox({
   onChange,
   alt = "Full view"
 }: PhotoLightboxProps) {
+  const [mounted, setMounted] = useState(false);
   const index = useMemo(() => (src ? photos.indexOf(src) : -1), [photos, src]);
   const canCycle = photos.length > 1 && index >= 0;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!src) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -65,35 +73,37 @@ export function PhotoLightbox({
       }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [src, canCycle, index, photos, onChange, onClose]);
 
-  if (!src) return null;
+  if (!src || !mounted) return null;
 
   const go = (delta: number) => {
     if (!canCycle) return;
     onChange(photos[(index + delta + photos.length) % photos.length]);
   };
 
-  const arrowStyle: CSSProperties = {
-    position: "absolute",
-    top: "50%",
-    transform: "translateY(-50%)",
-    width: 36,
-    height: 36,
+  const arrowBtn: CSSProperties = {
+    width: 48,
+    height: 48,
     borderRadius: "50%",
-    border: "1px solid rgba(255,255,255,0.28)",
-    background: "rgba(0,0,0,0.45)",
+    border: "1px solid rgba(255,255,255,0.32)",
+    background: "rgba(0,0,0,0.55)",
     color: "#fff",
     display: "grid",
     placeItems: "center",
     cursor: "pointer",
     padding: 0,
-    zIndex: 1,
-    backdropFilter: "blur(4px)"
+    pointerEvents: "auto",
+    touchAction: "manipulation",
+    backdropFilter: "blur(6px)",
+    WebkitTapHighlightColor: "transparent"
   };
 
-  return (
+  return createPortal(
     <div
       onClick={onClose}
       role="dialog"
@@ -102,13 +112,14 @@ export function PhotoLightbox({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 120,
-        background: "rgba(0,0,0,0.85)",
+        zIndex: 400,
+        background: "rgba(0,0,0,0.88)",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 20,
-        cursor: "pointer"
+        flexDirection: "column",
+        // Leave room for bottom nav so controls stay above it.
+        paddingBottom: "calc(var(--nav-height) + var(--safe-bottom))",
+        cursor: "pointer",
+        pointerEvents: "auto"
       }}
     >
       <button
@@ -123,8 +134,8 @@ export function PhotoLightbox({
           position: "absolute",
           top: "max(12px, env(safe-area-inset-top, 0px))",
           left: "max(12px, env(safe-area-inset-left, 0px))",
-          width: 40,
-          height: 40,
+          width: 44,
+          height: 44,
           borderRadius: "50%",
           border: "1px solid rgba(255,255,255,0.28)",
           background: "rgba(0,0,0,0.55)",
@@ -134,74 +145,99 @@ export function PhotoLightbox({
           cursor: "pointer",
           padding: 0,
           zIndex: 2,
+          pointerEvents: "auto",
+          touchAction: "manipulation",
           backdropFilter: "blur(4px)"
         }}
       >
         <CloseIcon />
       </button>
+
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          position: "relative",
-          maxWidth: "100%",
-          maxHeight: "90vh",
+          flex: 1,
+          minHeight: 0,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center"
+          justifyContent: "center",
+          padding: "56px 16px 72px",
+          position: "relative",
+          cursor: "default",
+          pointerEvents: "auto"
         }}
       >
-        {canCycle ? (
-          <button
-            type="button"
-            aria-label="Previous photo"
-            onClick={() => go(-1)}
-            style={{ ...arrowStyle, left: 8 }}
-          >
-            <Chevron dir="prev" />
-          </button>
-        ) : null}
         <img
           src={src}
           alt={alt}
+          draggable={false}
           style={{
             maxWidth: "100%",
-            maxHeight: "90vh",
+            maxHeight: "100%",
             borderRadius: "var(--radius)",
             objectFit: "contain",
             display: "block",
-            cursor: "default"
+            pointerEvents: "none",
+            userSelect: "none"
           }}
         />
+
         {canCycle ? (
-          <button
-            type="button"
-            aria-label="Next photo"
-            onClick={() => go(1)}
-            style={{ ...arrowStyle, right: 8 }}
-          >
-            <Chevron dir="next" />
-          </button>
-        ) : null}
-        {canCycle ? (
-          <span
+          <div
             style={{
               position: "absolute",
-              bottom: 10,
               left: "50%",
+              bottom: 12,
               transform: "translateX(-50%)",
-              fontSize: 12,
-              fontWeight: 600,
-              color: "rgba(255,255,255,0.85)",
-              background: "rgba(0,0,0,0.45)",
-              borderRadius: 999,
-              padding: "3px 10px",
-              pointerEvents: "none"
+              display: "flex",
+              alignItems: "center",
+              gap: 18,
+              zIndex: 3,
+              pointerEvents: "auto"
             }}
           >
-            {index + 1} / {photos.length}
-          </span>
+            <button
+              type="button"
+              aria-label="Previous photo"
+              onClick={(e) => {
+                e.stopPropagation();
+                go(-1);
+              }}
+              style={arrowBtn}
+            >
+              <Chevron dir="prev" />
+            </button>
+            <span
+              style={{
+                fontSize: 13,
+                fontWeight: 600,
+                color: "rgba(255,255,255,0.9)",
+                background: "rgba(0,0,0,0.5)",
+                borderRadius: 999,
+                padding: "6px 12px",
+                minWidth: 52,
+                textAlign: "center",
+                pointerEvents: "none",
+                backdropFilter: "blur(4px)"
+              }}
+            >
+              {index + 1} / {photos.length}
+            </span>
+            <button
+              type="button"
+              aria-label="Next photo"
+              onClick={(e) => {
+                e.stopPropagation();
+                go(1);
+              }}
+              style={arrowBtn}
+            >
+              <Chevron dir="next" />
+            </button>
+          </div>
         ) : null}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
