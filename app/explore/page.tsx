@@ -10,7 +10,7 @@ import {
   useRef,
   useState
 } from "react";
-import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenchReviews, updateBenchLocation } from "@/src/lib/api";
+import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenchReviews, listWishlist, searchBenches, updateBenchLocation } from "@/src/lib/api";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
@@ -19,6 +19,7 @@ import type { ViewportBounds } from "@/src/components/explore-map";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 import { isOnboardingComplete } from "@/src/lib/onboarding";
+import { BENCH_FACET_TAG_LABELS, BENCH_TYPE_LABELS } from "@/src/lib/bench-type";
 import { useRouter } from "next/navigation";
 
 const ADD_FORM_PEEK_VH = 58;
@@ -161,14 +162,7 @@ const LocateIcon = () => (
 type ExploreFilters = {
   minRating?: number;
   types?: string[];
-};
-
-const BENCH_TYPE_LABELS: Record<string, string> = {
-  park: "park",
-  wooden: "wooden",
-  stone: "stone",
-  modern: "modern",
-  memorial: "memorial"
+  tags?: string[];
 };
 
 export default function ExplorePage() {
@@ -190,7 +184,7 @@ export default function ExplorePage() {
   const [addStatus, setAddStatus] = useState<string | null>(null);
   const [addName, setAddName] = useState("");
   const [addNeighborhood, setAddNeighborhood] = useState("volunteer park");
-  const [addType, setAddType] = useState("park");
+  const [addType, setAddType] = useState("wooden");
   const [addDescription, setAddDescription] = useState("");
   const [locating, setLocating] = useState(false);
   const [sheetBenchID, setSheetBenchID] = useState<string | null>(null);
@@ -199,6 +193,13 @@ export default function ExplorePage() {
   const [carouselPad, setCarouselPad] = useState(48);
   const [toast, setToast] = useState<string | null>(null);
   const toastKey = useRef(0);
+  const [wishlistIDs, setWishlistIDs] = useState<Set<string>>(() => new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<BenchPin[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
   const [addFormHeightVh, setAddFormHeightVh] = useState(ADD_FORM_PEEK_VH);
   const [addFormDragging, setAddFormDragging] = useState(false);
   const addFormDragStartY = useRef(0);
@@ -237,6 +238,9 @@ export default function ExplorePage() {
     }
     if (f.minRating) arr = arr.filter((b) => b.averageRating >= f.minRating!);
     if (f.types && f.types.length > 0) arr = arr.filter((b) => f.types!.includes(b.type));
+    if (f.tags && f.tags.length > 0) {
+      arr = arr.filter((b) => f.tags!.some((t) => (b.tags ?? []).includes(t)));
+    }
     return arr;
   }, []);
 
@@ -323,13 +327,73 @@ export default function ExplorePage() {
     });
   }, []);
 
+  const toggleTag = useCallback((value: string) => {
+    setFilters((prev) => {
+      const current = prev.tags ?? [];
+      const next = current.includes(value)
+        ? current.filter((t) => t !== value)
+        : [...current, value];
+      if (next.length === 0) {
+        const out = { ...prev };
+        delete out.tags;
+        return out;
+      }
+      return { ...prev, tags: next };
+    });
+  }, []);
+
   useEffect(() => {
     if (profileId) {
       getProfile(profileId, { slim: true })
         .then((p) => setBenchmarkedIDs(p.benchmarkedBenchIDs))
         .catch(() => {});
+      listWishlist(profileId)
+        .then((ids) => setWishlistIDs(new Set(ids)))
+        .catch(() => {});
+    } else {
+      setWishlistIDs(new Set());
     }
   }, [profileId]);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(() => {
+      searchBenches(q, 12)
+        .then((rows) => {
+          setSearchResults(rows);
+          setSearchOpen(true);
+        })
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false));
+    }, 220);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (!searchWrapRef.current?.contains(e.target as Node)) setSearchOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const handleWishlistChange = useCallback((benchId: string, next: boolean) => {
+    setWishlistIDs((prev) => {
+      const copy = new Set(prev);
+      if (next) copy.add(benchId);
+      else copy.delete(benchId);
+      return copy;
+    });
+  }, []);
 
   useEffect(() => {
     if (carouselBenches.length > 0 && !selectedBenchID) {
@@ -337,7 +401,11 @@ export default function ExplorePage() {
     }
   }, [carouselBenches, selectedBenchID]);
 
-  const hasFilters = Boolean(filters.minRating || (filters.types && filters.types.length > 0));
+  const hasFilters = Boolean(
+    filters.minRating ||
+      (filters.types && filters.types.length > 0) ||
+      (filters.tags && filters.tags.length > 0)
+  );
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
   const sheetCached = sheetBenchID ? detailCacheRef.current.get(sheetBenchID) : undefined;
 
@@ -387,6 +455,19 @@ export default function ExplorePage() {
     }
   }, [prefetchBench]);
 
+  const handleSearchSelect = useCallback(
+    (pin: BenchPin) => {
+      pinCacheRef.current.set(pin.id, pin);
+      setSearchQuery(pin.name);
+      setSearchOpen(false);
+      setSearchResults([]);
+      flyToRef.current(pin.latitude, pin.longitude);
+      openBenchSheet(pin);
+      trackEvent({ name: "bench_search_selected", benchId: pin.id });
+    },
+    [openBenchSheet]
+  );
+
   const closeBenchSheet = useCallback(() => {
     setSheetBenchID(null);
     setSheetPin(null);
@@ -430,7 +511,8 @@ export default function ExplorePage() {
       averageRating: updated.averageRating,
       latitude: updated.latitude || prevPin?.latitude || 0,
       longitude: updated.longitude || prevPin?.longitude || 0,
-      reviewCount: prevPin?.reviewCount ?? 0
+      reviewCount: prevPin?.reviewCount ?? 0,
+      tags: updated.tags?.length ? updated.tags : prevPin?.tags ?? []
     };
     pinCacheRef.current.set(updated.id, nextPin);
     setBenches((prev) => prev.map((b) => (b.id === updated.id ? { ...b, ...nextPin } : b)));
@@ -702,27 +784,99 @@ export default function ExplorePage() {
       >
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <BenchmarkLogo size={32} />
-          <div style={{ flex: 1, minWidth: 0, display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => setIsFilterOpen((o) => !o)}
-              style={{
-                fontSize: 12,
-                padding: "6px 10px",
-                height: 32,
-                borderRadius: 999,
-                border: hasFilters ? "1px solid var(--accent)" : "1px solid var(--border)",
-                background: hasFilters ? "var(--accent-soft)" : "var(--surface)",
-                color: hasFilters ? "var(--accent)" : "var(--text-primary)",
-                fontWeight: hasFilters ? 600 : 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                transition: "all 0.2s"
+          <div ref={searchWrapRef} style={{ flex: 1, minWidth: 140, position: "relative" }}>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setSearchOpen(true);
               }}
-            >
-              filters{hasFilters ? " ●" : ""}
-            </button>
+              onFocus={() => {
+                if (searchResults.length > 0) setSearchOpen(true);
+              }}
+              placeholder="search name or place…"
+              aria-label="Search benches by name or location"
+              style={{
+                width: "100%",
+                height: 36,
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                padding: "0 14px",
+                fontSize: 13,
+                fontFamily: "inherit"
+              }}
+            />
+            {searchOpen && searchQuery.trim().length >= 2 ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  left: 0,
+                  right: 0,
+                  maxHeight: 280,
+                  overflowY: "auto",
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 14,
+                  boxShadow: "0 10px 28px rgba(0,0,0,0.14)",
+                  zIndex: 20
+                }}
+              >
+                {searchLoading ? (
+                  <p className="muted" style={{ margin: 0, padding: 12, fontSize: 13 }}>searching…</p>
+                ) : searchResults.length === 0 ? (
+                  <p className="muted" style={{ margin: 0, padding: 12, fontSize: 13 }}>no benches found</p>
+                ) : (
+                  searchResults.map((pin) => (
+                    <button
+                      key={pin.id}
+                      type="button"
+                      onClick={() => handleSearchSelect(pin)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "10px 12px",
+                        border: "none",
+                        borderBottom: "1px solid var(--border)",
+                        background: "transparent",
+                        cursor: "pointer",
+                        fontFamily: "inherit"
+                      }}
+                    >
+                      <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{pin.name}</span>
+                      <span className="muted" style={{ fontSize: 11 }}>
+                        {pin.neighborhood}
+                        {pin.type ? ` · ${pin.type}` : ""}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : null}
           </div>
+          <button
+            type="button"
+            onClick={() => setIsFilterOpen((o) => !o)}
+            style={{
+              fontSize: 12,
+              padding: "6px 10px",
+              height: 32,
+              borderRadius: 999,
+              border: hasFilters ? "1px solid var(--accent)" : "1px solid var(--border)",
+              background: hasFilters ? "var(--accent-soft)" : "var(--surface)",
+              color: hasFilters ? "var(--accent)" : "var(--text-primary)",
+              fontWeight: hasFilters ? 600 : 500,
+              cursor: "pointer",
+              fontFamily: "inherit",
+              transition: "all 0.2s",
+              flexShrink: 0
+            }}
+          >
+            filters{hasFilters ? " ●" : ""}
+          </button>
         </div>
 
         {isFilterOpen && (
@@ -752,13 +906,38 @@ export default function ExplorePage() {
             </div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
               <span className="muted" style={{ fontSize: 11, fontWeight: 600, width: 50 }}>type</span>
-              {Object.entries(BENCH_TYPE_LABELS).map(([value, label]) => {
+              {Object.entries(BENCH_TYPE_LABELS)
+                .filter(([value]) => value !== "unknown")
+                .map(([value, label]) => {
                 const active = (filters.types ?? []).includes(value);
                 return (
                   <button
                     key={value}
                     type="button"
                     onClick={() => toggleType(value)}
+                    style={{
+                      fontSize: 12, padding: "5px 10px", height: 30, borderRadius: 999,
+                      border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: active ? "var(--accent)" : "var(--surface)",
+                      color: active ? "#f6f5f1" : "var(--text-primary)",
+                      fontWeight: active ? 600 : 400, cursor: "pointer",
+                      fontFamily: "inherit", transition: "all 0.15s"
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span className="muted" style={{ fontSize: 11, fontWeight: 600, width: 50 }}>tags</span>
+              {Object.entries(BENCH_FACET_TAG_LABELS).map(([value, label]) => {
+                const active = (filters.tags ?? []).includes(value);
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => toggleTag(value)}
                     style={{
                       fontSize: 12, padding: "5px 10px", height: 30, borderRadius: 999,
                       border: active ? "1px solid var(--accent)" : "1px solid var(--border)",
@@ -1212,7 +1391,19 @@ export default function ExplorePage() {
                 </label>
                 <label>
                   type
-                  <input value={addType} onChange={(e) => setAddType(e.target.value)} style={{ width: "100%", marginTop: 4 }} />
+                  <select
+                    value={addType}
+                    onChange={(e) => setAddType(e.target.value)}
+                    style={{ width: "100%", marginTop: 4 }}
+                  >
+                    {Object.entries(BENCH_TYPE_LABELS)
+                      .filter(([value]) => value !== "unknown")
+                      .map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label>
                   description
@@ -1243,6 +1434,8 @@ export default function ExplorePage() {
           onReviewsUpdated={handleSheetReviewsUpdated}
           onDelete={isAdmin ? handleDeleteBench : undefined}
           onBenchUpdated={isAdmin ? handleBenchUpdated : undefined}
+          wishlisted={wishlistIDs.has(sheetPin.id)}
+          onWishlistChange={handleWishlistChange}
           onToast={showToast}
         />
       )}

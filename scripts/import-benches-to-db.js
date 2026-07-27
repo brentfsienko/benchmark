@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { config as loadEnv } from "dotenv";
+import { deriveFacetTags, normalizeBenchType } from "./bench-importer/bench-type.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -47,13 +48,20 @@ function buildDescription(bench) {
 
 function toRpcPayload(bench) {
   const neighborhood = bench.parkName || bench.siteName || "Seattle";
-  const benchType = (bench.category || bench.material || "park").toLowerCase();
+  const signals = {
+    category: bench.category,
+    material: bench.material,
+    donorPlaque: bench.donorPlaque,
+    isPark: true
+  };
+  const benchType = normalizeBenchType(signals);
+  const facetTags = deriveFacetTags(signals);
   const photoUrls = (bench.photos || []).map((p) => p.url).filter(Boolean);
   return {
     p_id: `bench-sea-${bench.externalId}`,
     p_name: bench.name,
     p_neighborhood: neighborhood,
-    p_bench_type: benchType.slice(0, 80),
+    p_bench_type: benchType,
     p_description: buildDescription(bench),
     p_lat: bench.latitude,
     p_lng: bench.longitude,
@@ -72,7 +80,7 @@ function toRpcPayload(bench) {
     p_photo_urls: photoUrls,
     p_source_raw: bench.source?.rawRow ?? null,
     p_created_by_user_id: "user-1",
-    p_tags: ["seattle-parks"]
+    p_tags: ["seattle-parks", ...facetTags]
   };
 }
 
