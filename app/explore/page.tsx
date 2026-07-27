@@ -16,6 +16,12 @@ import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
 import { Toast } from "@/src/components/toast";
 import type { ViewportBounds } from "@/src/components/explore-map";
+import {
+  NEARBY_ZOOM,
+  readSavedMapView,
+  viewportAround,
+  type SavedMapView
+} from "@/src/lib/map-view";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 import { isOnboardingComplete } from "@/src/lib/onboarding";
@@ -206,6 +212,9 @@ export default function ExplorePage() {
   const addFormDragStartY = useRef(0);
   const addFormDragStartVh = useRef(ADD_FORM_PEEK_VH);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
+  const [bootView, setBootView] = useState<SavedMapView | null>(null);
+  const pinFetchGenRef = useRef(0);
+  const pinAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isOnboardingComplete()) {
@@ -255,8 +264,15 @@ export default function ExplorePage() {
 
   const refresh = useCallback(async (bounds: ViewportBounds) => {
     setError(null);
+    pinAbortRef.current?.abort();
+    const ac = new AbortController();
+    pinAbortRef.current = ac;
+    const gen = ++pinFetchGenRef.current;
     try {
-      const data = await listBenchPins(bounds, filtersRef.current.minRating);
+      const data = await listBenchPins(bounds, filtersRef.current.minRating, {
+        signal: ac.signal
+      });
+      if (gen !== pinFetchGenRef.current) return;
       const cache = pinCacheRef.current;
       for (const pin of data) {
         cache.set(pin.id, pin);
@@ -271,6 +287,7 @@ export default function ExplorePage() {
         metadata: { count: filtered.length, cached: cache.size, zoom: bounds.zoom ?? -1 }
       });
     } catch (err) {
+      if (ac.signal.aborted || gen !== pinFetchGenRef.current) return;
       setError(err instanceof Error ? err.message : "unable to load benches");
       setLoading(false);
     }
@@ -285,6 +302,41 @@ export default function ExplorePage() {
     setSelectedBenchID((prev) => pickSelection(prev, filtered, bounds));
     refresh(bounds).catch(() => {});
   }, [applyFilters, pickSelection, refresh]);
+
+  // Prefetch pins before Leaflet finishes: saved camera, else GPS nearby.
+  useEffect(() => {
+    const saved = readSavedMapView();
+    if (saved) {
+      setBootView(saved);
+      const bounds = viewportAround(saved.lat, saved.lng, saved.zoom) as ViewportBounds;
+      currentBoundsRef.current = bounds;
+      setViewportBounds(bounds);
+      refresh(bounds).catch(() => {});
+      return;
+    }
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) return;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const view: SavedMapView = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          zoom: NEARBY_ZOOM
+        };
+        setBootView(view);
+        const bounds = viewportAround(view.lat, view.lng, view.zoom) as ViewportBounds;
+        currentBoundsRef.current = bounds;
+        setViewportBounds(bounds);
+        refresh(bounds).catch(() => {});
+      },
+      () => {
+        // Map will emit world bounds on GPS failure; no Seattle fallback.
+      },
+      { enableHighAccuracy: false, timeout: 2500, maximumAge: 120_000 }
+    );
+    return () => {
+      pinAbortRef.current?.abort();
+    };
+  }, [refresh]);
 
   useEffect(() => {
     const filtered = applyFilters(pinCacheRef.current, filters, currentBoundsRef.current);
@@ -774,6 +826,7 @@ export default function ExplorePage() {
           benchmarkedBenchIDs={benchmarkedIDs}
           enableFogOfWar={false}
           centerOnUserOnLoad
+          bootView={bootView}
         />
       </div>
 
