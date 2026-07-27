@@ -226,7 +226,10 @@ main {
 
 /* Leaflet map overrides */
 .explore-map .leaflet-container {
+  width: 100%;
+  height: 100%;
   font-family: var(--font-stack);
+  background: var(--elevated);
 }
 .explore-map .bench-pin,
 .explore-map .bench-cluster {
