@@ -40,17 +40,31 @@ export async function GET(request: NextRequest) {
     }
 
     const sw_lat = parseFloat(swLat);
-    const sw_lng = parseFloat(swLng);
     const ne_lat = parseFloat(neLat);
-    const ne_lng = parseFloat(neLng);
-    if (![sw_lat, sw_lng, ne_lat, ne_lng].every(Number.isFinite)) {
+    const swLngRaw = parseFloat(swLng);
+    const neLngRaw = parseFloat(neLng);
+    if (![sw_lat, swLngRaw, ne_lat, neLngRaw].every(Number.isFinite)) {
       return jsonError("Bounding box params must be numbers", "validation_error", 422);
     }
     if (sw_lat < -90 || ne_lat > 90 || sw_lat > ne_lat) {
       return jsonError("Invalid latitude bounds", "validation_error", 422);
     }
-    if (Math.abs(sw_lng) > 180 || Math.abs(ne_lng) > 180) {
-      return jsonError("Invalid longitude bounds", "validation_error", 422);
+
+    // Leaflet worldCopyJump / low zoom can emit lng outside ±180 — wrap instead of failing.
+    const wrapLng = (lng: number) => {
+      let x = lng;
+      while (x > 180) x -= 360;
+      while (x < -180) x += 360;
+      return x;
+    };
+    let sw_lng: number;
+    let ne_lng: number;
+    if (neLngRaw - swLngRaw >= 359) {
+      sw_lng = -180;
+      ne_lng = 180;
+    } else {
+      sw_lng = wrapLng(swLngRaw);
+      ne_lng = wrapLng(neLngRaw);
     }
 
     const supabase = createSupabaseServer();

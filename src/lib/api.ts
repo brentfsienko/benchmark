@@ -1,4 +1,5 @@
 import { env, getApiBaseUrl } from "./env";
+import { normalizeViewportBounds } from "./map-view";
 import type {
   ActivityItem,
   Bench,
@@ -88,17 +89,19 @@ export async function listBenchPins(
   init?: { signal?: AbortSignal }
 ): Promise<BenchPin[]> {
   const round4 = (n: number) => Math.round(n * 10000) / 10000;
+  // Leaflet world views can emit lng outside ±180; normalize before the API.
+  const b = normalizeViewportBounds(bounds);
   const params = new URLSearchParams({
-    sw_lat: String(round4(bounds.sw_lat)),
-    sw_lng: String(round4(bounds.sw_lng)),
-    ne_lat: String(round4(bounds.ne_lat)),
-    ne_lng: String(round4(bounds.ne_lng))
+    sw_lat: String(round4(b.sw_lat)),
+    sw_lng: String(round4(b.sw_lng)),
+    ne_lat: String(round4(b.ne_lat)),
+    ne_lng: String(round4(b.ne_lng))
   });
   if (minRating !== undefined && minRating !== null) {
     params.set("minRating", String(minRating));
   }
-  if (bounds.zoom !== undefined && bounds.zoom !== null) {
-    params.set("zoom", String(Math.round(bounds.zoom)));
+  if (b.zoom !== undefined && b.zoom !== null) {
+    params.set("zoom", String(Math.round(b.zoom)));
   }
   // Allow short CDN cache from the API; still bypasses local Next fetch cache for mutations via refresh.
   return request<BenchPin[]>(`/benches/pins?${params.toString()}`, {
