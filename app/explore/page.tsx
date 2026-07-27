@@ -44,14 +44,64 @@ const CAROUSEL_CARD_WIDTH = 168;
 const CAROUSEL_GAP = 10;
 /** Fraction of the map viewport (centered) used for the preview carousel. */
 const CAROUSEL_FOCUS_FRACTION = 0.36;
+/** Soft cap so a world pan session can't grow unbounded in memory. */
+const PIN_CACHE_MAX = 2500;
+
+function lngInBounds(lng: number, swLng: number, neLng: number): boolean {
+  // Antimeridian: sw is east of ne (e.g. 170 → -170).
+  if (swLng > neLng) return lng >= swLng || lng <= neLng;
+  return lng >= swLng && lng <= neLng;
+}
 
 function pinInBounds(b: BenchPin, bounds: ViewportBounds): boolean {
   return (
     b.latitude >= bounds.sw_lat &&
     b.latitude <= bounds.ne_lat &&
-    b.longitude >= bounds.sw_lng &&
-    b.longitude <= bounds.ne_lng
+    lngInBounds(b.longitude, bounds.sw_lng, bounds.ne_lng)
   );
+}
+
+/** Expand viewport slightly so cache keeps pins just off-screen while panning. */
+function padBounds(bounds: ViewportBounds, factor = 0.35): ViewportBounds {
+  const latSpan = Math.max(bounds.ne_lat - bounds.sw_lat, 0.0001);
+  const crosses = bounds.sw_lng > bounds.ne_lng;
+  const lngSpan = crosses
+    ? Math.max(180 - bounds.sw_lng + (bounds.ne_lng + 180), 0.0001)
+    : Math.max(bounds.ne_lng - bounds.sw_lng, 0.0001);
+  const latPad = latSpan * factor;
+  const lngPad = lngSpan * factor;
+  let sw_lng = bounds.sw_lng - lngPad;
+  let ne_lng = bounds.ne_lng + lngPad;
+  if (!crosses) {
+    if (sw_lng < -180) sw_lng += 360;
+    if (ne_lng > 180) ne_lng -= 360;
+  }
+  return {
+    sw_lat: Math.max(-90, bounds.sw_lat - latPad),
+    ne_lat: Math.min(90, bounds.ne_lat + latPad),
+    sw_lng,
+    ne_lng,
+    zoom: bounds.zoom
+  };
+}
+
+function evictPinCache(cache: Map<string, BenchPin>, keepNear: ViewportBounds | null) {
+  if (!keepNear) {
+    if (cache.size > PIN_CACHE_MAX) cache.clear();
+    return;
+  }
+  const padded = padBounds(keepNear, 0.75);
+  for (const [id, pin] of cache) {
+    if (!pinInBounds(pin, padded)) cache.delete(id);
+  }
+  if (cache.size <= PIN_CACHE_MAX) return;
+  // Drop oldest insertion order until under cap.
+  const overflow = cache.size - PIN_CACHE_MAX;
+  let i = 0;
+  for (const id of cache.keys()) {
+    if (i++ >= overflow) break;
+    cache.delete(id);
+  }
 }
 
 /** Shrink viewport bounds to a centered focus rect for the carousel. */
@@ -66,7 +116,8 @@ function centerFocusBounds(bounds: ViewportBounds, fraction = CAROUSEL_FOCUS_FRA
     sw_lat: bounds.sw_lat + latPad + northBias,
     ne_lat: bounds.ne_lat - latPad + northBias,
     sw_lng: bounds.sw_lng + lngPad,
-    ne_lng: bounds.ne_lng - lngPad
+    ne_lng: bounds.ne_lng - lngPad,
+    zoom: bounds.zoom
   };
 }
 
@@ -205,13 +256,14 @@ export default function ExplorePage() {
       for (const pin of data) {
         cache.set(pin.id, pin);
       }
+      evictPinCache(cache, bounds);
       const filtered = applyFilters(cache, filtersRef.current, bounds);
       setBenches(filtered);
       setLoading(false);
       setSelectedBenchID((prev) => pickSelection(prev, filtered, bounds));
       trackEvent({
         name: "explore_loaded",
-        metadata: { count: filtered.length, cached: cache.size }
+        metadata: { count: filtered.length, cached: cache.size, zoom: bounds.zoom ?? -1 }
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "unable to load benches");

@@ -13,13 +13,47 @@ export type ViewportBounds = {
   sw_lng: number;
   ne_lat: number;
   ne_lng: number;
+  zoom?: number;
 };
 
-const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 } as const;
+const DEFAULT_MAP_CENTER = { lat: 20, lng: 0 } as const; // neutral until GPS / last view
+const GREEN_LAKE_CENTER = { lat: 47.6798, lng: -122.3288 } as const; // fog / Seattle challenge only
 const VOLUNTEER_PARK_CENTER = { lat: 47.6298, lng: -122.3142 } as const;
-const DEFAULT_ZOOM = 14;
+const DEFAULT_ZOOM = 2;
+const NEARBY_ZOOM = 15;
+const LAST_MAP_KEY = "benchmark:lastMapView";
 /** Shift fly-to center south so pins land in the clear map above the carousel. */
 const VISUAL_CENTER_OFFSET_Y_PX = 110;
+
+type SavedMapView = { lat: number; lng: number; zoom: number };
+
+function readSavedMapView(): SavedMapView | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_MAP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SavedMapView;
+    if (
+      !Number.isFinite(parsed.lat) ||
+      !Number.isFinite(parsed.lng) ||
+      !Number.isFinite(parsed.zoom)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedMapView(lat: number, lng: number, zoom: number) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LAST_MAP_KEY, JSON.stringify({ lat, lng, zoom }));
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 function benchPinSvg(selected: boolean, benchmarked?: boolean): string {
   const size = selected ? 32 : 24;
@@ -115,6 +149,7 @@ export function ExploreMap({
         sw_lng: b.getSouthWest().lng,
         ne_lat: b.getNorthEast().lat,
         ne_lng: b.getNorthEast().lng,
+        zoom: map.getZoom(),
       });
     }, 300);
   }, []);
@@ -137,10 +172,14 @@ export function ExploreMap({
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
       });
 
+      const saved = readSavedMapView();
       const map = L.default.map(mapRef.current!, {
-        center: [GREEN_LAKE_CENTER.lat, GREEN_LAKE_CENTER.lng],
-        zoom: DEFAULT_ZOOM,
-        zoomControl: false
+        center: saved
+          ? [saved.lat, saved.lng]
+          : [DEFAULT_MAP_CENTER.lat, DEFAULT_MAP_CENTER.lng],
+        zoom: saved?.zoom ?? DEFAULT_ZOOM,
+        zoomControl: false,
+        worldCopyJump: true
       });
 
       L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
@@ -174,7 +213,11 @@ export function ExploreMap({
       mapInstanceRef.current = map;
       setMapReady(true);
 
-      map.on("moveend", () => emitBounds(map));
+      map.on("moveend", () => {
+        const c = map.getCenter();
+        writeSavedMapView(c.lat, c.lng, map.getZoom());
+        emitBounds(map);
+      });
 
       const flyTo = (lat: number, lng: number) => {
         // Keep the user's zoom — never force a level that zooms them out.
@@ -187,12 +230,12 @@ export function ExploreMap({
       };
       onMapReady?.(flyTo);
 
-      // One initial bounds fetch: wait briefly for GPS, then settle (avoids Green Lake + user double-load).
-      if (centerOnUserOnLoad && "geolocation" in navigator) {
+      // Prefer GPS on first visit; otherwise keep last saved view / world overview.
+      if (centerOnUserOnLoad && !saved && "geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             if (!mapInstanceRef.current) return;
-            map.setView([pos.coords.latitude, pos.coords.longitude], 15, { animate: false });
+            map.setView([pos.coords.latitude, pos.coords.longitude], NEARBY_ZOOM, { animate: false });
             emitBounds(map);
           },
           () => {

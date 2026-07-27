@@ -79,6 +79,7 @@ export type BenchPinBounds = {
   sw_lng: number;
   ne_lat: number;
   ne_lng: number;
+  zoom?: number;
 };
 
 export async function listBenchPins(bounds: BenchPinBounds, minRating?: number): Promise<BenchPin[]> {
@@ -91,7 +92,11 @@ export async function listBenchPins(bounds: BenchPinBounds, minRating?: number):
   if (minRating !== undefined && minRating !== null) {
     params.set("minRating", String(minRating));
   }
-  return request<BenchPin[]>(`/benches/pins?${params.toString()}`, { cache: "no-store" });
+  if (bounds.zoom !== undefined && bounds.zoom !== null) {
+    params.set("zoom", String(bounds.zoom));
+  }
+  // Allow short CDN cache from the API; still bypasses local Next fetch cache for mutations via refresh.
+  return request<BenchPin[]>(`/benches/pins?${params.toString()}`);
 }
 
 export function getBench(benchID: string): Promise<Bench> {

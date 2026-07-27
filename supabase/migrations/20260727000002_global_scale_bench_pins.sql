@@ -1,5 +1,3 @@
--- Prefer supabase/global_scale_bench_pins.sql (same content; this alias kept for earlier docs).
-
 -- Global-scale bench pins: denormalized review stats + zoom-aware viewport query.
 -- Safe to re-run. Use this instead of aggregating bench_reviews on every map pan.
 --
