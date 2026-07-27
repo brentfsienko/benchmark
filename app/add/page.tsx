@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { createBench } from "@/src/lib/api";
+import { BENCH_TYPE_OPTIONS } from "@/src/lib/bench-type";
 import { trackEvent } from "@/src/lib/analytics";
 import { useAuth } from "@/src/contexts/auth-context";
 import { SectionHeader } from "@/src/components/section-header";
@@ -20,14 +21,6 @@ const NEIGHBORHOODS = [
   "Other"
 ];
 
-const BENCH_TYPES = [
-  { value: "park", label: "park (standard)" },
-  { value: "wooden", label: "wooden" },
-  { value: "stone", label: "stone" },
-  { value: "modern", label: "modern" },
-  { value: "memorial", label: "memorial" }
-];
-
 const defaultLat = 47.6798;
 const defaultLng = -122.3288;
 
@@ -39,7 +32,7 @@ export default function AddBenchPage() {
   const [name, setName] = useState("");
   const [neighborhood, setNeighborhood] = useState("Green Lake");
   const [customNeighborhood, setCustomNeighborhood] = useState("");
-  const [type, setType] = useState("park");
+  const [type, setType] = useState("wooden");
   const [description, setDescription] = useState("");
   const [latitude, setLatitude] = useState(String(defaultLat));
   const [longitude, setLongitude] = useState(String(defaultLng));
@@ -174,7 +167,7 @@ export default function AddBenchPage() {
             </div>
             <div>
               <span className="muted" style={{ fontSize: 12 }}>type</span>
-              <p style={{ margin: "4px 0 0" }}>{BENCH_TYPES.find((t) => t.value === type)?.label ?? type}</p>
+              <p style={{ margin: "4px 0 0" }}>{BENCH_TYPE_OPTIONS.find((t) => t.value === type)?.label ?? type}</p>
             </div>
             {description && (
               <div>
@@ -259,7 +252,7 @@ export default function AddBenchPage() {
             onChange={(e) => setType(e.target.value)}
             style={{ width: "100%", marginTop: 6 }}
           >
-            {BENCH_TYPES.map((t) => (
+            {BENCH_TYPE_OPTIONS.filter((t) => t.value !== "unknown").map((t) => (
               <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </select>

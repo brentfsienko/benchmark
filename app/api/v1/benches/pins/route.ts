@@ -4,6 +4,10 @@ import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
 import type { BenchPin } from "@/src/lib/types";
 
 function toPin(row: Record<string, unknown>): BenchPin {
+  const rawTags = row.tags;
+  const tags: string[] = Array.isArray(rawTags)
+    ? rawTags.map((t) => String(t))
+    : [];
   return {
     id: String(row.id),
     name: String(row.name),
@@ -13,6 +17,7 @@ function toPin(row: Record<string, unknown>): BenchPin {
     reviewCount: Number(row.review_count ?? 0),
     latitude: Number(row.lat),
     longitude: Number(row.lng),
+    tags,
   };
 }
 

@@ -53,16 +53,21 @@ export async function loadChallengeData(): Promise<ChallengePageData> {
   const allChallenges: Challenge[] = (challengeRes.data ?? []).map(toChallenge);
   const gl = allChallenges.find((c) => c.id === GREEN_LAKE_CHALLENGE_ID || c.parkId === "green-lake") ?? null;
 
-  const top8: BenchPin[] = (pinsRes.data ?? []).slice(0, 8).map((r: Record<string, unknown>) => ({
-    id: String(r.id),
-    name: String(r.name),
-    neighborhood: String(r.neighborhood),
-    type: String(r.bench_type),
-    averageRating: Number(r.average_rating),
-    reviewCount: Number(r.review_count ?? 0),
-    latitude: Number(r.lat),
-    longitude: Number(r.lng),
-  }));
+  const top8: BenchPin[] = (pinsRes.data ?? []).slice(0, 8).map((r: Record<string, unknown>) => {
+    const rawTags = r.tags;
+    const tags: string[] = Array.isArray(rawTags) ? rawTags.map((t) => String(t)) : [];
+    return {
+      id: String(r.id),
+      name: String(r.name),
+      neighborhood: String(r.neighborhood),
+      type: String(r.bench_type),
+      averageRating: Number(r.average_rating),
+      reviewCount: Number(r.review_count ?? 0),
+      latitude: Number(r.lat),
+      longitude: Number(r.lng),
+      tags,
+    };
+  });
 
   const benchIds = top8.map((b) => b.id);
 

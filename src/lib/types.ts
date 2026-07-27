@@ -31,6 +31,8 @@ export type BenchPin = {
   reviewCount: number;
   latitude: number;
   longitude: number;
+  /** Filterable facet tags: park, memorial, historic, etc. */
+  tags: string[];
 };
 
 export type BenchReview = {

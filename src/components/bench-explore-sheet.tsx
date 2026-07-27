@@ -12,7 +12,7 @@ import {
   useRef,
   useState
 } from "react";
-import { listBenchReviews, submitBenchmark, updateBench } from "@/src/lib/api";
+import { addWishlistItem, listBenchReviews, removeWishlistItem, submitBenchmark, updateBench } from "@/src/lib/api";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
 import {
@@ -39,6 +39,9 @@ type BenchExploreSheetProps = {
   onDelete?: (benchId: string) => Promise<void> | void;
   /** Admin-only: after name/description edits. */
   onBenchUpdated?: (bench: Bench) => void;
+  /** Prefetched wishlist membership for this pin. */
+  wishlisted?: boolean;
+  onWishlistChange?: (benchId: string, wishlisted: boolean) => void;
   onToast?: (message: string) => void;
 };
 
@@ -53,7 +56,8 @@ type ProximityState =
   | { status: "unavailable"; message: string };
 
 const PEEK_VH = 52;
-const EXPANDED_VH = 92;
+/** Near-full sheet; sits above the bottom nav so photos aren't cropped. */
+const EXPANDED_VH = 96;
 const MAX_PHOTOS = MAX_PHOTOS_PER_REVIEW;
 
 const RATING_LABELS: Record<string, string> = {
@@ -118,6 +122,18 @@ function PencilIcon() {
   );
 }
 
+function HeartIcon({ filled }: { filled: boolean }) {
+  return filled ? (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" strokeWidth="2">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  ) : (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
 function readCurrentPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
@@ -145,6 +161,8 @@ export function BenchExploreSheet({
   onReviewsUpdated,
   onDelete,
   onBenchUpdated,
+  wishlisted: wishlistedProp = false,
+  onWishlistChange,
   onToast
 }: BenchExploreSheetProps) {
   const { profileId, isAdmin } = useAuth();
@@ -160,10 +178,10 @@ export function BenchExploreSheet({
   const officialPhotos = bench?.photoUrls ?? [];
 
   const [mode, setMode] = useState<SheetMode>("overview");
-  const [heightVh, setHeightVh] = useState(PEEK_VH);
+  const [heightVh, setHeightVh] = useState(EXPANDED_VH);
   const [dragging, setDragging] = useState(false);
   const dragStartY = useRef(0);
-  const dragStartVh = useRef(PEEK_VH);
+  const dragStartVh = useRef(EXPANDED_VH);
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [submitRating, setSubmitRating] = useState(4);
@@ -179,12 +197,21 @@ export function BenchExploreSheet({
   const [editName, setEditName] = useState(name);
   const [editDescription, setEditDescription] = useState(description);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [wishlisted, setWishlisted] = useState(wishlistedProp);
+  const [wishlistLoading, setWishlistLoading] = useState(false);
+
+  useEffect(() => {
+    setWishlisted(wishlistedProp);
+  }, [wishlistedProp, pin.id]);
 
   useEffect(() => {
     setEditing(false);
     setEditName(name);
     setEditDescription(description);
     setStatus(null);
+    setMode("overview");
+    setHeightVh(EXPANDED_VH);
+    contentRef.current?.scrollTo({ top: 0 });
   }, [pin.id, name, description]);
 
   const toggleReviewExpanded = useCallback((reviewId: string) => {
@@ -478,6 +505,33 @@ export function BenchExploreSheet({
     }
   };
 
+  const handleWishlistToggle = async () => {
+    if (!profileId) {
+      onToast?.("sign in to save to wishlist");
+      return;
+    }
+    if (wishlistLoading) return;
+    setWishlistLoading(true);
+    try {
+      if (wishlisted) {
+        await removeWishlistItem(profileId, pin.id);
+        setWishlisted(false);
+        onWishlistChange?.(pin.id, false);
+        onToast?.("removed from wishlist");
+      } else {
+        await addWishlistItem(profileId, pin.id);
+        setWishlisted(true);
+        onWishlistChange?.(pin.id, true);
+        onToast?.("saved to wishlist");
+        trackEvent({ name: "wishlist_added", benchId: pin.id, userId: profileId });
+      }
+    } catch (err) {
+      onToast?.(err instanceof Error ? err.message : "unable to update wishlist");
+    } finally {
+      setWishlistLoading(false);
+    }
+  };
+
   return (
     <div
       role="dialog"
@@ -486,18 +540,23 @@ export function BenchExploreSheet({
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 20,
+        // Above bottom nav so the sheet isn't tucked under it / cropping photos.
+        zIndex: 60,
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
-        pointerEvents: "none"
+        pointerEvents: "none",
+        paddingBottom: "calc(var(--nav-height) + var(--safe-bottom))"
       }}
     >
       <div
         aria-hidden
         style={{
           position: "absolute",
-          inset: 0,
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: "calc(var(--nav-height) + var(--safe-bottom))",
           background: "rgba(35, 32, 27, 0.35)",
           pointerEvents: "auto"
         }}
@@ -510,7 +569,7 @@ export function BenchExploreSheet({
           maxWidth: 560,
           margin: "0 auto",
           height: `${heightVh}vh`,
-          maxHeight: `calc(100dvh - var(--safe-top, 0px))`,
+          maxHeight: "calc(100dvh - var(--safe-top, 0px) - var(--nav-height) - var(--safe-bottom))",
           display: "flex",
           flexDirection: "column",
           borderBottomLeftRadius: 0,
@@ -520,8 +579,7 @@ export function BenchExploreSheet({
           boxShadow: "0 -8px 32px rgba(0,0,0,0.18)",
           overflow: "hidden",
           pointerEvents: "auto",
-          transition: dragging ? "none" : "height 0.22s ease",
-          paddingBottom: "calc(var(--nav-height) + var(--safe-bottom))"
+          transition: dragging ? "none" : "height 0.22s ease"
         }}
       >
         <div
@@ -591,42 +649,45 @@ export function BenchExploreSheet({
                 <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>{name}</p>
               ) : null}
             </div>
-            {isAdmin && mode === "overview" ? (
-              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              {mode === "overview" ? (
                 <button
                   type="button"
+                  className={`wishlist-btn${wishlisted ? " saved" : ""}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (editing) cancelEditing();
-                    else startEditing();
+                    void handleWishlistToggle();
                   }}
                   onPointerDown={(e) => e.stopPropagation()}
-                  aria-label={editing ? "Cancel edit" : "Edit bench"}
-                  title={editing ? "Cancel edit" : "Edit bench"}
+                  disabled={wishlistLoading}
+                  aria-label={wishlisted ? "Remove from wishlist" : "Save to wishlist"}
+                  title={wishlisted ? "saved" : "save"}
                   style={{
                     width: 40,
                     height: 40,
+                    padding: 0,
+                    justifyContent: "center",
                     borderRadius: "50%",
-                    display: "grid",
-                    placeItems: "center",
-                    border: "1px solid var(--border)",
-                    background: "var(--elevated)",
-                    color: "var(--text-primary)",
-                    cursor: "pointer"
+                    gap: 0
                   }}
                 >
-                  <PencilIcon />
+                  <span className="heart-icon">
+                    <HeartIcon filled={wishlisted} />
+                  </span>
                 </button>
-                {onDelete ? (
+              ) : null}
+              {isAdmin && mode === "overview" ? (
+                <>
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      void handleDelete();
+                      if (editing) cancelEditing();
+                      else startEditing();
                     }}
-                    disabled={deleting || editing}
-                    aria-label="Delete bench"
-                    title="Delete bench"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={editing ? "Cancel edit" : "Edit bench"}
+                    title={editing ? "Cancel edit" : "Edit bench"}
                     style={{
                       width: 40,
                       height: 40,
@@ -635,16 +696,41 @@ export function BenchExploreSheet({
                       placeItems: "center",
                       border: "1px solid var(--border)",
                       background: "var(--elevated)",
-                      color: "var(--danger)",
-                      cursor: deleting ? "wait" : "pointer",
-                      opacity: deleting || editing ? 0.6 : 1
+                      color: "var(--text-primary)",
+                      cursor: "pointer"
                     }}
                   >
-                    <TrashIcon />
+                    <PencilIcon />
                   </button>
-                ) : null}
-              </div>
-            ) : null}
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleDelete();
+                      }}
+                      disabled={deleting || editing}
+                      aria-label="Delete bench"
+                      title="Delete bench"
+                      style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: "50%",
+                        display: "grid",
+                        placeItems: "center",
+                        border: "1px solid var(--border)",
+                        background: "var(--elevated)",
+                        color: "var(--danger)",
+                        cursor: deleting ? "wait" : "pointer",
+                        opacity: deleting || editing ? 0.6 : 1
+                      }}
+                    >
+                      <TrashIcon />
+                    </button>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
           {status && mode === "overview" ? (
             <p style={{ margin: "8px 0 0", color: "var(--danger)", fontSize: 12 }}>{status}</p>

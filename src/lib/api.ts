@@ -99,6 +99,13 @@ export async function listBenchPins(bounds: BenchPinBounds, minRating?: number):
   return request<BenchPin[]>(`/benches/pins?${params.toString()}`);
 }
 
+export function searchBenches(query: string, limit = 20): Promise<BenchPin[]> {
+  const q = query.trim();
+  if (q.length < 2) return Promise.resolve([]);
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return request<BenchPin[]>(`/benches/search?${params.toString()}`);
+}
+
 export function getBench(benchID: string): Promise<Bench> {
   return request<Bench>(`/benches/${benchID}`, { cache: "no-store" });
 }
