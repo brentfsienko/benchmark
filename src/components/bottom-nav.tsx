@@ -61,7 +61,9 @@ export function BottomNav() {
     pathname === "/onboarding" ||
     pathname?.startsWith("/auth") ||
     pathname === "/";
-  const visibleLinks = user ? links : links.filter((item) => item.href !== "/home");
+  const visibleLinks = user
+    ? links
+    : links.filter((item) => item.href !== "/home" && item.href !== "/challenges");
 
   useEffect(() => {
     if (!user || !profileId) {

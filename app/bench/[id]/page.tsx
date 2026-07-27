@@ -314,7 +314,10 @@ export default function BenchDetailPage() {
             <div>
               <h1 style={{ marginTop: 0, marginBottom: 4 }}>{bench.name}</h1>
               <p className="muted" style={{ margin: 0 }}>
-                {bench.neighborhood} • {bench.type} • {bench.averageRating.toFixed(1)} ★
+                {bench.neighborhood}
+                {bench.type && bench.type !== "unknown" ? ` • ${bench.type}` : ""}
+                {" • "}
+                {bench.averageRating.toFixed(1)} ★
               </p>
             </div>
             <button

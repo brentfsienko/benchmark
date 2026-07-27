@@ -82,21 +82,28 @@ export type BenchPinBounds = {
   zoom?: number;
 };
 
-export async function listBenchPins(bounds: BenchPinBounds, minRating?: number): Promise<BenchPin[]> {
+export async function listBenchPins(
+  bounds: BenchPinBounds,
+  minRating?: number,
+  init?: { signal?: AbortSignal }
+): Promise<BenchPin[]> {
+  const round4 = (n: number) => Math.round(n * 10000) / 10000;
   const params = new URLSearchParams({
-    sw_lat: String(bounds.sw_lat),
-    sw_lng: String(bounds.sw_lng),
-    ne_lat: String(bounds.ne_lat),
-    ne_lng: String(bounds.ne_lng),
+    sw_lat: String(round4(bounds.sw_lat)),
+    sw_lng: String(round4(bounds.sw_lng)),
+    ne_lat: String(round4(bounds.ne_lat)),
+    ne_lng: String(round4(bounds.ne_lng))
   });
   if (minRating !== undefined && minRating !== null) {
     params.set("minRating", String(minRating));
   }
   if (bounds.zoom !== undefined && bounds.zoom !== null) {
-    params.set("zoom", String(bounds.zoom));
+    params.set("zoom", String(Math.round(bounds.zoom)));
   }
   // Allow short CDN cache from the API; still bypasses local Next fetch cache for mutations via refresh.
-  return request<BenchPin[]>(`/benches/pins?${params.toString()}`);
+  return request<BenchPin[]>(`/benches/pins?${params.toString()}`, {
+    signal: init?.signal
+  });
 }
 
 export function searchBenches(query: string, limit = 20): Promise<BenchPin[]> {
