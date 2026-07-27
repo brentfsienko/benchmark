@@ -198,6 +198,7 @@ export default function ExplorePage() {
   const [searchResults, setSearchResults] = useState<BenchPin[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchWrapRef = useRef<HTMLDivElement>(null);
   const [addFormHeightVh, setAddFormHeightVh] = useState(ADD_FORM_PEEK_VH);
@@ -380,11 +381,14 @@ export default function ExplorePage() {
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!searchWrapRef.current?.contains(e.target as Node)) setSearchOpen(false);
+      if (!searchWrapRef.current?.contains(e.target as Node)) {
+        setSearchOpen(false);
+        if (!searchQuery.trim()) setSearchExpanded(false);
+      }
     };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  }, [searchQuery]);
 
   const handleWishlistChange = useCallback((benchId: string, next: boolean) => {
     setWishlistIDs((prev) => {
@@ -460,6 +464,7 @@ export default function ExplorePage() {
       pinCacheRef.current.set(pin.id, pin);
       setSearchQuery(pin.name);
       setSearchOpen(false);
+      setSearchExpanded(false);
       setSearchResults([]);
       flyToRef.current(pin.latitude, pin.longitude);
       openBenchSheet(pin);
@@ -782,39 +787,86 @@ export default function ExplorePage() {
           borderBottom: "1px solid rgba(218,207,191,0.4)"
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <BenchmarkLogo size={32} />
-          <div ref={searchWrapRef} style={{ flex: 1, minWidth: 140, position: "relative" }}>
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setSearchOpen(true);
-              }}
-              onFocus={() => {
-                if (searchResults.length > 0) setSearchOpen(true);
-              }}
-              placeholder="search name or place…"
-              aria-label="Search benches by name or location"
-              style={{
-                width: "100%",
-                height: 36,
-                borderRadius: 999,
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-                padding: "0 14px",
-                fontSize: 13,
-                fontFamily: "inherit"
-              }}
-            />
-            {searchOpen && searchQuery.trim().length >= 2 ? (
+          <div style={{ flex: 1, minWidth: 0 }} />
+          <div
+            ref={searchWrapRef}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              flexShrink: 0
+            }}
+          >
+            {searchExpanded ? (
+              <input
+                type="search"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => {
+                  if (searchResults.length > 0) setSearchOpen(true);
+                }}
+                onBlur={() => {
+                  // Keep open while interacting with results; collapse if empty shortly after.
+                  window.setTimeout(() => {
+                    if (!searchQuery.trim() && !searchOpen) setSearchExpanded(false);
+                  }, 180);
+                }}
+                placeholder="name or place…"
+                aria-label="Search benches by name or location"
+                style={{
+                  width: "min(52vw, 220px)",
+                  height: 36,
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  padding: "0 14px",
+                  fontSize: 13,
+                  fontFamily: "inherit",
+                  transition: "width 0.2s ease"
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchExpanded(true);
+                  setSearchOpen(true);
+                }}
+                aria-label="Open search"
+                title="Search"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: "50%",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  display: "grid",
+                  placeItems: "center",
+                  cursor: "pointer",
+                  color: "var(--text-primary)",
+                  padding: 0
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-3.5-3.5" />
+                </svg>
+              </button>
+            )}
+            {searchExpanded && searchOpen && searchQuery.trim().length >= 2 ? (
               <div
                 style={{
                   position: "absolute",
                   top: "calc(100% + 6px)",
-                  left: 0,
                   right: 0,
+                  width: "min(86vw, 320px)",
                   maxHeight: 280,
                   overflowY: "auto",
                   background: "var(--surface)",
@@ -849,7 +901,7 @@ export default function ExplorePage() {
                       <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{pin.name}</span>
                       <span className="muted" style={{ fontSize: 11 }}>
                         {pin.neighborhood}
-                        {pin.type ? ` · ${pin.type}` : ""}
+                        {pin.type && pin.type !== "unknown" ? ` · ${pin.type}` : ""}
                       </span>
                     </button>
                   ))

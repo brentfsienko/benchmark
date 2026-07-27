@@ -767,7 +767,8 @@ export function BenchExploreSheet({
                     {rating.toFixed(1)} ★
                   </p>
                   <p className="muted" style={{ margin: "4px 0 0", fontSize: 12 }}>
-                    {neighborhood} · {type}
+                    {neighborhood}
+                    {type && type !== "unknown" ? ` · ${type}` : ""}
                   </p>
                 </div>
                 <div style={{ textAlign: "right" }}>
