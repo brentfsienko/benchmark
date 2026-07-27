@@ -122,6 +122,7 @@ export function ExploreMap({
   const appliedBootRef = useRef(false);
   const [mounted, setMounted] = useState(false);
   const [mapReady, setMapReady] = useState(false);
+  const [clusterReady, setClusterReady] = useState(false);
 
   const pushBounds = useCallback((map: LeafletMap) => {
     const b = map.getBounds();
@@ -156,136 +157,169 @@ export function ExploreMap({
   emitBoundsNowRef.current = emitBoundsNow;
   const emitBoundsRef = useRef(emitBounds);
   emitBoundsRef.current = emitBounds;
+  const centerOnUserRef = useRef(centerOnUserOnLoad);
+  centerOnUserRef.current = centerOnUserOnLoad;
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Create the map as soon as the container has a real size. Tiles first; clustering second.
   useEffect(() => {
-    if (!mounted || !mapRef.current || typeof window === "undefined") return;
+    if (!mounted || typeof window === "undefined") return;
+    const el = mapRef.current;
+    if (!el) return;
 
     let cancelled = false;
     let resizeObserver: ResizeObserver | null = null;
+    const retryTimers: number[] = [];
 
-    void Promise.all([import("leaflet"), import("leaflet.markercluster")]).then(([L]) => {
+    const fixSize = () => {
+      const map = mapInstanceRef.current;
+      if (!map) return;
+      map.invalidateSize({ pan: false });
+    };
+
+    const setupMap = async () => {
+      const leafletMod = await import("leaflet");
       if (cancelled || !mapRef.current || mapInstanceRef.current) return;
+      const L = leafletMod.default;
 
-      const proto = L.default.Icon.Default.prototype;
-      if ("_getIconUrl" in proto) {
-        delete (proto as unknown as Record<string, unknown>)["_getIconUrl"];
-      }
-      L.default.Icon.Default.mergeOptions({
+      const proto = L.Icon.Default.prototype as unknown as Record<string, unknown>;
+      if ("_getIconUrl" in proto) delete proto["_getIconUrl"];
+      L.Icon.Default.mergeOptions({
         iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
         iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
         shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png"
       });
 
-      const saved = readSavedMapView();
-      const boot = bootViewRef.current;
-      const initial = saved ?? boot;
-      const map = L.default.map(mapRef.current, {
-        center: initial
-          ? [initial.lat, initial.lng]
-          : [WORLD_MAP_CENTER.lat, WORLD_MAP_CENTER.lng],
-        zoom: initial?.zoom ?? WORLD_ZOOM,
-        zoomControl: false,
-        worldCopyJump: true
-      });
-      if (cancelled) {
-        map.remove();
-        return;
-      }
-      if (initial) appliedBootRef.current = true;
+      const tryCreate = () => {
+        const node = mapRef.current;
+        if (cancelled || !node || mapInstanceRef.current) return;
+        const { width, height } = node.getBoundingClientRect();
+        if (width < 16 || height < 16) return;
 
-      L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-        attribution: "© OSM © CARTO",
-        subdomains: "abcd",
-        maxZoom: 20
-      }).addTo(map);
-
-      L.default.control.zoom({ position: "bottomright" }).addTo(map);
-
-      const clusterGroup = L.default.markerClusterGroup({
-        showCoverageOnHover: false,
-        zoomToBoundsOnClick: true,
-        spiderfyOnMaxZoom: true,
-        disableClusteringAtZoom: 18,
-        maxClusterRadius: 56,
-        iconCreateFunction: (cluster) => {
-          const count = cluster.getChildCount();
-          const size = count >= 100 ? 48 : count >= 25 ? 42 : count >= 10 ? 36 : 32;
-          return L.default.divIcon({
-            html: clusterPinHtml(count),
-            className: "bench-cluster",
-            iconSize: [size, size],
-            iconAnchor: [size / 2, size / 2]
-          });
+        const saved = readSavedMapView();
+        const boot = bootViewRef.current;
+        const initial = saved ?? boot;
+        const map = L.map(node, {
+          center: initial
+            ? [initial.lat, initial.lng]
+            : [WORLD_MAP_CENTER.lat, WORLD_MAP_CENTER.lng],
+          zoom: initial?.zoom ?? WORLD_ZOOM,
+          zoomControl: false,
+          worldCopyJump: true
+        });
+        if (cancelled) {
+          map.remove();
+          return;
         }
-      });
-      clusterGroup.addTo(map);
-      clusterGroupRef.current = clusterGroup;
+        if (initial) appliedBootRef.current = true;
 
-      mapInstanceRef.current = map;
-      setMapReady(true);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+          attribution: "© OSM © CARTO",
+          subdomains: "abcd",
+          maxZoom: 20
+        }).addTo(map);
 
-      // Container often lays out after Leaflet init — force a redraw so tiles appear.
-      const fixSize = () => {
-        if (!mapInstanceRef.current) return;
-        map.invalidateSize({ pan: false });
-      };
-      requestAnimationFrame(() => {
+        L.control.zoom({ position: "bottomright" }).addTo(map);
+
+        mapInstanceRef.current = map;
+        setMapReady(true);
         fixSize();
-        requestAnimationFrame(fixSize);
-      });
-      window.setTimeout(fixSize, 100);
-      window.setTimeout(fixSize, 400);
-      if (typeof ResizeObserver !== "undefined" && mapRef.current) {
-        resizeObserver = new ResizeObserver(() => fixSize());
-        resizeObserver.observe(mapRef.current);
-      }
+        requestAnimationFrame(() => {
+          fixSize();
+          requestAnimationFrame(fixSize);
+        });
 
-      map.on("moveend", () => {
-        const c = map.getCenter();
-        writeSavedMapView(c.lat, c.lng, map.getZoom());
-        emitBoundsRef.current(map);
-      });
+        map.on("moveend", () => {
+          const c = map.getCenter();
+          writeSavedMapView(c.lat, c.lng, map.getZoom());
+          emitBoundsRef.current(map);
+        });
 
-      const flyTo = (lat: number, lng: number) => {
-        const zoom = map.getZoom();
-        const projected = map.project([lat, lng], zoom);
-        const adjusted = L.default.point(projected.x, projected.y + VISUAL_CENTER_OFFSET_Y_PX);
-        const center = map.unproject(adjusted, zoom);
-        map.flyTo(center, zoom, { duration: 0.4 });
-      };
-      onMapReadyRef.current?.(flyTo);
+        const flyTo = (lat: number, lng: number) => {
+          const zoom = map.getZoom();
+          const projected = map.project([lat, lng], zoom);
+          const adjusted = L.point(projected.x, projected.y + VISUAL_CENTER_OFFSET_Y_PX);
+          const center = map.unproject(adjusted, zoom);
+          map.flyTo(center, zoom, { duration: 0.4 });
+        };
+        onMapReadyRef.current?.(flyTo);
 
-      if (initial) {
-        emitBoundsNowRef.current(map);
-      } else if (centerOnUserOnLoad && "geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            if (cancelled || !mapInstanceRef.current) return;
-            appliedBootRef.current = true;
-            map.setView([pos.coords.latitude, pos.coords.longitude], NEARBY_ZOOM, {
-              animate: false
+        if (initial) {
+          emitBoundsNowRef.current(map);
+        } else if (centerOnUserRef.current && "geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (cancelled || !mapInstanceRef.current) return;
+              appliedBootRef.current = true;
+              map.setView([pos.coords.latitude, pos.coords.longitude], NEARBY_ZOOM, {
+                animate: false
+              });
+              fixSize();
+              emitBoundsNowRef.current(map);
+            },
+            () => {
+              if (cancelled || !mapInstanceRef.current) return;
+              emitBoundsNowRef.current(map);
+            },
+            { enableHighAccuracy: false, timeout: 2500, maximumAge: 120_000 }
+          );
+        } else {
+          emitBoundsNowRef.current(map);
+        }
+
+        // Clustering is optional for first paint — attach after tiles are up.
+        void import("leaflet.markercluster")
+          .then(() => {
+            if (cancelled || !mapInstanceRef.current || clusterGroupRef.current) return;
+            const clusterGroup = L.markerClusterGroup({
+              showCoverageOnHover: false,
+              zoomToBoundsOnClick: true,
+              spiderfyOnMaxZoom: true,
+              disableClusteringAtZoom: 18,
+              maxClusterRadius: 56,
+              iconCreateFunction: (cluster) => {
+                const count = cluster.getChildCount();
+                const size = count >= 100 ? 48 : count >= 25 ? 42 : count >= 10 ? 36 : 32;
+                return L.divIcon({
+                  html: clusterPinHtml(count),
+                  className: "bench-cluster",
+                  iconSize: [size, size],
+                  iconAnchor: [size / 2, size / 2]
+                });
+              }
             });
-            map.invalidateSize({ pan: false });
-            emitBoundsNowRef.current(map);
-          },
-          () => {
-            if (cancelled || !mapInstanceRef.current) return;
-            emitBoundsNowRef.current(map);
-          },
-          { enableHighAccuracy: false, timeout: 2500, maximumAge: 120_000 }
-        );
-      } else {
-        emitBoundsNowRef.current(map);
-      }
-    });
+            clusterGroup.addTo(map);
+            clusterGroupRef.current = clusterGroup;
+            setClusterReady(true);
+          })
+          .catch((err) => {
+            console.warn("markercluster unavailable; pins will attach without clustering", err);
+          });
+      };
+
+      resizeObserver = new ResizeObserver(() => {
+        if (!mapInstanceRef.current) tryCreate();
+        else fixSize();
+      });
+      resizeObserver.observe(mapRef.current);
+      tryCreate();
+      retryTimers.push(
+        window.setTimeout(tryCreate, 0),
+        window.setTimeout(tryCreate, 50),
+        window.setTimeout(tryCreate, 150),
+        window.setTimeout(tryCreate, 400)
+      );
+    };
+
+    void setupMap();
 
     return () => {
       cancelled = true;
       resizeObserver?.disconnect();
+      for (const t of retryTimers) window.clearTimeout(t);
       if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
       clusterGroupRef.current?.clearLayers();
       clusterGroupRef.current = null;
@@ -304,8 +338,9 @@ export function ExploreMap({
       }
       appliedBootRef.current = false;
       setMapReady(false);
+      setClusterReady(false);
     };
-  }, [mounted, centerOnUserOnLoad]);
+  }, [mounted]);
 
   // If the page resolves GPS after the map mounted on world view, snap once.
   useEffect(() => {
@@ -429,13 +464,24 @@ export function ExploreMap({
   }, [mounted, tempPlacement]);
 
   useEffect(() => {
-    if (!mounted || !mapInstanceRef.current || !clusterGroupRef.current) return;
+    if (!mounted || !mapInstanceRef.current) return;
+    const cluster = clusterGroupRef.current;
+    const map = mapInstanceRef.current;
 
-    void import("leaflet").then((L) => {
-      const cluster = clusterGroupRef.current;
-      if (!cluster) return;
-
-      cluster.clearLayers();
+    void import("leaflet").then((leafletMod) => {
+      const L = leafletMod.default;
+      if (cluster) {
+        markersRef.current.forEach((m) => {
+          try {
+            cluster.removeLayer(m);
+          } catch {
+            m.remove();
+          }
+        });
+        cluster.clearLayers();
+      } else {
+        markersRef.current.forEach((m) => m.remove());
+      }
       markersRef.current = [];
       markersByIdRef.current.clear();
 
@@ -447,14 +493,14 @@ export function ExploreMap({
         const isSelected = !addMode && bench.id === selected;
         const isBenchmarked = bmSet.has(bench.id);
         const size = isSelected ? 32 : 24;
-        const icon = L.default.divIcon({
+        const icon = L.divIcon({
           className: "bench-pin",
           html: benchPinSvg(isSelected, isBenchmarked),
           iconSize: [size, size],
           iconAnchor: [size / 2, size]
         });
 
-        const marker = L.default.marker([bench.latitude, bench.longitude], { icon });
+        const marker = L.marker([bench.latitude, bench.longitude], { icon });
         marker.on("click", () => {
           const current = benchesRef.current.find((b) => b.id === bench.id) ?? bench;
           if (addMode && onMapClickRef.current) {
@@ -467,23 +513,25 @@ export function ExploreMap({
         markersByIdRef.current.set(bench.id, marker);
       });
 
-      cluster.addLayers(markers);
+      if (cluster) cluster.addLayers(markers);
+      else markers.forEach((m) => m.addTo(map));
       markersRef.current = markers;
     });
     // Intentionally omit selectedBenchID — selection is a cheap icon refresh below.
-  }, [mounted, mapReady, benches, addMode, benchmarkedBenchIDs]);
+  }, [mounted, mapReady, clusterReady, benches, addMode, benchmarkedBenchIDs]);
 
   // Restyle only the previous + current selection without rebuilding the cluster.
   useEffect(() => {
     if (!mounted || !mapInstanceRef.current) return;
-    void import("leaflet").then((L) => {
+    void import("leaflet").then((leafletMod) => {
+      const L = leafletMod.default;
       const bmSet = new Set(benchmarkedBenchIDs);
       markersByIdRef.current.forEach((marker: Marker, id: string) => {
         const isSelected = !addMode && id === selectedBenchID;
         const isBenchmarked = bmSet.has(id);
         const size = isSelected ? 32 : 24;
         marker.setIcon(
-          L.default.divIcon({
+          L.divIcon({
             className: "bench-pin",
             html: benchPinSvg(isSelected, isBenchmarked),
             iconSize: [size, size],
@@ -494,23 +542,7 @@ export function ExploreMap({
     });
   }, [mounted, mapReady, selectedBenchID, addMode, benchmarkedBenchIDs]);
 
-  if (!mounted) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          minHeight: 200,
-          background: "var(--elevated)",
-          display: "grid",
-          placeItems: "center"
-        }}
-      >
-        <span className="muted">loading map…</span>
-      </div>
-    );
-  }
-
+  // Keep a stable map container from the first client paint so Leaflet can attach immediately.
   return (
     <div className="explore-map" style={{ position: "relative", width: "100%", height: "100%", minHeight: 200 }}>
       <div
@@ -519,9 +551,26 @@ export function ExploreMap({
           width: "100%",
           height: "100%",
           minHeight: 200,
-          overflow: "hidden"
+          overflow: "hidden",
+          background: "var(--elevated)"
         }}
       />
+      {!mapReady ? (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            pointerEvents: "none",
+            color: "var(--muted)"
+          }}
+        >
+          <span className="muted" style={{ fontSize: 13 }}>
+            loading map…
+          </span>
+        </div>
+      ) : null}
       {enableFogOfWar && mapReady && mapInstanceRef.current && (
         <FogOverlay
           mapInstance={mapInstanceRef.current}

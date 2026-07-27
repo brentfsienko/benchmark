@@ -40,9 +40,7 @@ const ExploreMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div style={{ height: "100%", display: "grid", placeItems: "center" }}>
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>loading map…</p>
-      </div>
+      <div style={{ height: "100%", background: "var(--elevated)" }} />
     )
   }
 );
@@ -221,6 +219,12 @@ export default function ExplorePage() {
       router.replace("/onboarding");
     }
   }, [router]);
+
+  // Warm Leaflet while the explore shell mounts so the map isn't waiting on a cold chunk.
+  useEffect(() => {
+    void import("leaflet");
+    void import("leaflet.markercluster");
+  }, []);
 
   useEffect(() => {
     if (showAddForm) {
