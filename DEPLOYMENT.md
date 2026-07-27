@@ -46,7 +46,17 @@ Optional: under **Domains**, use your custom domain as the share link so people 
 
 Admin-only actions (add / move / rename / delete benches) stay limited to allowlisted emails in `src/lib/admin.ts`.
 
-## 5. Local Development
+## 5. Global-scale map pins
+
+Explore never loads “all benches.” It queries the current map viewport via `list_bench_pins`.
+
+For millions of benches worldwide, run **`supabase/global_scale_bench_pins.sql`** in the Supabase SQL editor. That:
+
+- stores `review_count` on each bench (updated by trigger — no full-table review scan per pan)
+- adapts LIMIT + grid sampling when zoomed out
+- handles the antimeridian (±180°)
+
+## 6. Local Development
 
 ```bash
 cp .env.example .env.local
