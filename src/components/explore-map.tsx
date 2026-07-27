@@ -115,6 +115,8 @@ export function ExploreMap({
   const boundsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onBoundsChangeRef = useRef(onBoundsChange);
   onBoundsChangeRef.current = onBoundsChange;
+  const onMapReadyRef = useRef(onMapReady);
+  onMapReadyRef.current = onMapReady;
   const bootViewRef = useRef(bootView);
   bootViewRef.current = bootView;
   const appliedBootRef = useRef(false);
@@ -150,6 +152,11 @@ export function ExploreMap({
     [pushBounds]
   );
 
+  const emitBoundsNowRef = useRef(emitBoundsNow);
+  emitBoundsNowRef.current = emitBoundsNow;
+  const emitBoundsRef = useRef(emitBounds);
+  emitBoundsRef.current = emitBounds;
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -157,7 +164,12 @@ export function ExploreMap({
   useEffect(() => {
     if (!mounted || !mapRef.current || typeof window === "undefined") return;
 
+    let cancelled = false;
+    let resizeObserver: ResizeObserver | null = null;
+
     void Promise.all([import("leaflet"), import("leaflet.markercluster")]).then(([L]) => {
+      if (cancelled || !mapRef.current || mapInstanceRef.current) return;
+
       const proto = L.default.Icon.Default.prototype;
       if ("_getIconUrl" in proto) {
         delete (proto as unknown as Record<string, unknown>)["_getIconUrl"];
@@ -171,7 +183,7 @@ export function ExploreMap({
       const saved = readSavedMapView();
       const boot = bootViewRef.current;
       const initial = saved ?? boot;
-      const map = L.default.map(mapRef.current!, {
+      const map = L.default.map(mapRef.current, {
         center: initial
           ? [initial.lat, initial.lng]
           : [WORLD_MAP_CENTER.lat, WORLD_MAP_CENTER.lng],
@@ -179,6 +191,10 @@ export function ExploreMap({
         zoomControl: false,
         worldCopyJump: true
       });
+      if (cancelled) {
+        map.remove();
+        return;
+      }
       if (initial) appliedBootRef.current = true;
 
       L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
@@ -212,48 +228,64 @@ export function ExploreMap({
       mapInstanceRef.current = map;
       setMapReady(true);
 
+      // Container often lays out after Leaflet init — force a redraw so tiles appear.
+      const fixSize = () => {
+        if (!mapInstanceRef.current) return;
+        map.invalidateSize({ pan: false });
+      };
+      requestAnimationFrame(() => {
+        fixSize();
+        requestAnimationFrame(fixSize);
+      });
+      window.setTimeout(fixSize, 100);
+      window.setTimeout(fixSize, 400);
+      if (typeof ResizeObserver !== "undefined" && mapRef.current) {
+        resizeObserver = new ResizeObserver(() => fixSize());
+        resizeObserver.observe(mapRef.current);
+      }
+
       map.on("moveend", () => {
         const c = map.getCenter();
         writeSavedMapView(c.lat, c.lng, map.getZoom());
-        emitBounds(map);
+        emitBoundsRef.current(map);
       });
 
       const flyTo = (lat: number, lng: number) => {
-        // Keep the user's zoom — never force a level that zooms them out.
-        // Offset so the pin sits in the visual center above the bottom carousel.
         const zoom = map.getZoom();
         const projected = map.project([lat, lng], zoom);
         const adjusted = L.default.point(projected.x, projected.y + VISUAL_CENTER_OFFSET_Y_PX);
         const center = map.unproject(adjusted, zoom);
         map.flyTo(center, zoom, { duration: 0.4 });
       };
-      onMapReady?.(flyTo);
+      onMapReadyRef.current?.(flyTo);
 
-      // Saved / page-boot view: fetch immediately. Otherwise wait for GPS instead of
-      // issuing a world-bbox pin request first. GPS failure falls back to world sample.
       if (initial) {
-        emitBoundsNow(map);
+        emitBoundsNowRef.current(map);
       } else if (centerOnUserOnLoad && "geolocation" in navigator) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            if (!mapInstanceRef.current) return;
+            if (cancelled || !mapInstanceRef.current) return;
             appliedBootRef.current = true;
             map.setView([pos.coords.latitude, pos.coords.longitude], NEARBY_ZOOM, {
               animate: false
             });
-            emitBoundsNow(map);
+            map.invalidateSize({ pan: false });
+            emitBoundsNowRef.current(map);
           },
           () => {
-            emitBoundsNow(map);
+            if (cancelled || !mapInstanceRef.current) return;
+            emitBoundsNowRef.current(map);
           },
           { enableHighAccuracy: false, timeout: 2500, maximumAge: 120_000 }
         );
       } else {
-        emitBoundsNow(map);
+        emitBoundsNowRef.current(map);
       }
     });
 
     return () => {
+      cancelled = true;
+      resizeObserver?.disconnect();
       if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
       clusterGroupRef.current?.clearLayers();
       clusterGroupRef.current = null;
@@ -266,14 +298,14 @@ export function ExploreMap({
       vpMarkerRef.current = null;
       userMarkerRef.current?.remove();
       userMarkerRef.current = null;
-      if (geoWatchIDRef.current !== null && typeof window !== "undefined" && "geolocation" in navigator) {
+      if (geoWatchIDRef.current !== null && "geolocation" in navigator) {
         navigator.geolocation.clearWatch(geoWatchIDRef.current);
         geoWatchIDRef.current = null;
       }
       appliedBootRef.current = false;
       setMapReady(false);
     };
-  }, [mounted, onMapReady, emitBounds, emitBoundsNow, centerOnUserOnLoad]);
+  }, [mounted, centerOnUserOnLoad]);
 
   // If the page resolves GPS after the map mounted on world view, snap once.
   useEffect(() => {
@@ -282,6 +314,7 @@ export function ExploreMap({
     if (!map) return;
     appliedBootRef.current = true;
     map.setView([bootView.lat, bootView.lng], bootView.zoom, { animate: false });
+    map.invalidateSize({ pan: false });
     emitBoundsNow(map);
   }, [mapReady, bootView, emitBoundsNow]);
 
