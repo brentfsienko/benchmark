@@ -1,15 +1,14 @@
-import { safeRedirectPath } from "@/src/lib/safe-redirect";
-import { createServerClient } from "@supabase/ssr";
 import { type EmailOtpType } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { safeRedirectPath } from "@/src/lib/safe-redirect";
 
 /**
- * OAuth / PKCE code exchange callback.
- * Also accepts token_hash for older email links.
+ * Email confirmation / magic-link landing page.
+ * Uses token_hash + verifyOtp so links work across devices (no PKCE cookie required).
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const code = searchParams.get("code");
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = safeRedirectPath(searchParams.get("next"), "/");
@@ -17,6 +16,10 @@ export async function GET(request: NextRequest) {
   const successUrl = new URL(next, request.url);
   const errorUrl = new URL("/auth/error", request.url);
   errorUrl.searchParams.set("message", "auth_callback_failed");
+
+  if (!token_hash || !type) {
+    return NextResponse.redirect(errorUrl);
+  }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey =
@@ -43,17 +46,18 @@ export async function GET(request: NextRequest) {
     }
   });
 
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return response;
-    console.error("auth callback exchangeCodeForSession failed:", error.message);
+  const { error } = await supabase.auth.verifyOtp({ type, token_hash });
+  if (error) {
+    // Signup confirmations sometimes require type=signup instead of email.
+    if (type === "email") {
+      const retry = await supabase.auth.verifyOtp({ type: "signup", token_hash });
+      if (!retry.error) return response;
+      console.error("auth confirm verifyOtp failed:", error.message, retry.error.message);
+    } else {
+      console.error("auth confirm verifyOtp failed:", error.message);
+    }
+    return NextResponse.redirect(errorUrl);
   }
 
-  if (token_hash && type) {
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) return response;
-    console.error("auth callback verifyOtp failed:", error.message);
-  }
-
-  return NextResponse.redirect(errorUrl);
+  return response;
 }
