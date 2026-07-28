@@ -2,21 +2,28 @@ import { describe, expect, it } from "vitest";
 import {
   authEmailSubject,
   buildAuthConfirmationUrl,
+  mapActionToOtpType,
   parseHookSecret,
   resolveResendFrom
 } from "./auth-email";
 
 describe("auth-email helpers", () => {
-  it("builds a supabase verify URL with redirect", () => {
+  it("builds an app confirm URL with token_hash (not supabase verify)", () => {
     const url = buildAuthConfirmationUrl({
       token_hash: "abc123",
       email_action_type: "signup",
-      redirect_to: "https://benchmark.rest/auth/callback"
+      redirect_to: "https://benchmark.rest/auth/callback?next=%2Fhome"
     });
-    expect(url).toContain("/auth/v1/verify?");
-    expect(url).toContain("token=abc123");
-    expect(url).toContain("type=signup");
-    expect(url).toContain(encodeURIComponent("https://benchmark.rest/auth/callback"));
+    expect(url).toContain("https://benchmark.rest/auth/confirm?");
+    expect(url).toContain("token_hash=abc123");
+    expect(url).toContain("type=email");
+    expect(url).toContain("next=%2Fhome");
+    expect(url).not.toContain("supabase.co/auth/v1/verify");
+  });
+
+  it("maps signup action to email otp type", () => {
+    expect(mapActionToOtpType("signup")).toBe("email");
+    expect(mapActionToOtpType("recovery")).toBe("recovery");
   });
 
   it("maps subjects for known actions", () => {

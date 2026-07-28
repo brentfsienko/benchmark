@@ -69,7 +69,10 @@ export async function POST(request: NextRequest) {
       to: [to],
       subject: authEmailSubject(emailData.email_action_type),
       html: buildAuthEmailHtml(emailData, to),
-      text: buildAuthEmailText(emailData, to)
+      text: buildAuthEmailText(emailData, to),
+      headers: {
+        "X-Entity-Ref-ID": `${emailData.email_action_type}-${Date.now()}`
+      }
     });
     if (error) {
       console.error("Resend send failed:", error);
