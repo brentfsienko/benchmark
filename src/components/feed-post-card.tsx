@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState, type CSSProperties } from "react";
+import { FormEvent, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   addReviewComment,
   likeBenchmark,
@@ -116,18 +116,32 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   // Leave a peek of the next slide (~12%) when there are multiple.
   const slideWidth = multiSlide ? "88%" : "100%";
 
+  const likeInFlightRef = useRef(false);
+
   const toggleLike = async () => {
-    if (!viewerId || busy) return;
-    setBusy(true);
+    if (!viewerId || likeInFlightRef.current) return;
+    const prevLiked = liked;
+    const prevCount = likeCount;
+    const nextLiked = !prevLiked;
+    const nextCount = Math.max(0, prevCount + (nextLiked ? 1 : -1));
+    likeInFlightRef.current = true;
+    setLiked(nextLiked);
+    setLikeCount(nextCount);
+    onUpdated({ ...item, likedByMe: nextLiked, likeCount: nextCount });
     try {
-      const res = liked ? await unlikeBenchmark(item.id) : await likeBenchmark(item.id);
+      const res = nextLiked ? await likeBenchmark(item.id) : await unlikeBenchmark(item.id);
       setLiked(res.liked);
-      setLikeCount(res.likeCount);
-      onUpdated({ ...item, likedByMe: res.liked, likeCount: res.likeCount });
+      if (typeof res.likeCount === "number") {
+        setLikeCount(res.likeCount);
+        onUpdated({ ...item, likedByMe: res.liked, likeCount: res.likeCount });
+      }
     } catch (err) {
+      setLiked(prevLiked);
+      setLikeCount(prevCount);
+      onUpdated({ ...item, likedByMe: prevLiked, likeCount: prevCount });
       setStatus(err instanceof Error ? err.message : "unable to update like");
     } finally {
-      setBusy(false);
+      likeInFlightRef.current = false;
     }
   };
 
@@ -375,7 +389,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
           borderBottom: commentsOpen ? "1px solid var(--border)" : "none"
         }}
       >
-        <button type="button" onClick={() => void toggleLike()} disabled={!viewerId || busy} style={actionBtnStyle}>
+        <button type="button" onClick={() => void toggleLike()} disabled={!viewerId} style={actionBtnStyle}>
           {liked ? "♥ liked" : "♡ like"}
         </button>
         <button type="button" onClick={() => void openComments()} disabled={!viewerId} style={actionBtnStyle}>

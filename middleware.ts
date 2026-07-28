@@ -2,6 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
+  // Public catalog APIs don't need session refresh — skip auth RTT.
+  const path = request.nextUrl.pathname;
+  if (
+    path.startsWith("/api/v1/benches/pins") ||
+    path.startsWith("/api/v1/benches/search")
+  ) {
+    return NextResponse.next();
+  }
+
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const anonKey =
