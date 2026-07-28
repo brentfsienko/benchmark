@@ -122,8 +122,9 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   );
 
   const multiSlide = slides.length > 1;
-  // Phone-sized square tiles; peek of the next slide when there are multiple.
-  const mediaSize = 176;
+  // Nearly full-bleed slides; leave ~12% so the next photo peeks in.
+  const slideWidth = multiSlide ? "88%" : "100%";
+  const slideRadius = multiSlide ? 12 : 0;
 
   const likeInFlightRef = useRef(false);
 
@@ -340,7 +341,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             overflowX: "auto",
             scrollSnapType: "x mandatory",
             WebkitOverflowScrolling: "touch",
-            padding: "0",
+            padding: multiSlide ? "0 0 0 12px" : 0,
             scrollbarWidth: "none",
             msOverflowStyle: "none"
           }}
@@ -356,11 +357,9 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 else setLightboxSrc(s.src);
               }}
               style={{
-                flex: `0 0 ${mediaSize}px`,
-                width: mediaSize,
-                height: mediaSize,
-                marginLeft: i === 0 ? 14 : 0,
-                borderRadius: 12,
+                flex: `0 0 ${slideWidth}`,
+                aspectRatio: "1 / 1",
+                borderRadius: slideRadius,
                 overflow: "hidden",
                 isolation: "isolate",
                 scrollSnapAlign: "start",
@@ -386,7 +385,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               ) : null}
             </button>
           ))}
-          {multiSlide ? <div style={{ flex: "0 0 4px" }} aria-hidden /> : null}
+          {multiSlide ? <div style={{ flex: "0 0 12px" }} aria-hidden /> : null}
         </div>
       ) : null}
 
