@@ -104,7 +104,7 @@ export default function HomePage() {
         </div>
       ) : null}
 
-      <div style={{ display: "grid", gap: "var(--space-2)" }}>
+      <div style={{ display: "grid", gap: "var(--space-3)" }}>
         {user &&
           items.map((item) => (
             <FeedPostCard
