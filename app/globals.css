@@ -80,7 +80,8 @@ select {
 main {
   min-height: 100dvh;
   padding-top: var(--safe-top);
-  padding-bottom: calc(var(--nav-height) + var(--safe-bottom));
+  /* Extra slack so the last feed card clears the fixed nav + home indicator. */
+  padding-bottom: calc(var(--nav-height) + var(--safe-bottom) + var(--space-6));
 }
 
 .screen {
@@ -109,6 +110,14 @@ main {
 
 .feed-media-carousel::-webkit-scrollbar {
   display: none;
+}
+
+/* Keep feed minimaps from painting over the fixed bottom nav. */
+.feed-media-carousel .leaflet-container,
+.feed-media-carousel .leaflet-pane,
+.feed-media-carousel .leaflet-top,
+.feed-media-carousel .leaflet-bottom {
+  z-index: 0 !important;
 }
 
 .button-primary {
@@ -170,15 +179,16 @@ main {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 50;
-  padding-bottom: var(--safe-bottom);
+  /* Above feed content; sheets/lightboxes that cover the nav sit higher. */
+  z-index: 200;
   border-top: 1px solid var(--border);
-  background: rgba(247, 241, 232, 0.98);
+  background: var(--page);
   backdrop-filter: blur(12px);
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
+  padding-bottom: calc(var(--space-3) + var(--safe-bottom));
   min-height: var(--nav-height);
   align-items: center;
 }
