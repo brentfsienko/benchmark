@@ -226,9 +226,18 @@ export function updateProfile(
   });
 }
 
-export function listActivity(userID: string, options?: { feed?: boolean }): Promise<ActivityItem[]> {
-  const suffix = options?.feed ? "?feed=true" : "";
-  return request<ActivityItem[]>(`/users/${userID}/activity${suffix}`, { cache: "no-store" });
+export function listActivity(
+  userID: string,
+  options?: { feed?: boolean; limit?: number; before?: string }
+): Promise<ActivityItem[]> {
+  const params = new URLSearchParams();
+  if (options?.feed) params.set("feed", "true");
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  if (options?.before) params.set("before", options.before);
+  const qs = params.toString();
+  return request<ActivityItem[]>(`/users/${userID}/activity${qs ? `?${qs}` : ""}`, {
+    cache: "no-store"
+  });
 }
 
 export function listWishlist(userID: string): Promise<string[]> {
