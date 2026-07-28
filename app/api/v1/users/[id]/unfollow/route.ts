@@ -14,20 +14,26 @@ export async function POST(
   if (!followerId) return jsonError("Authentication required", "unauthorized", 401);
 
   const supabase = createSupabaseAdmin();
-  const { error: unfollowErr } = await supabase
-    .from("user_follows")
-    .delete()
-    .eq("follower_id", followerId)
-    .eq("following_id", targetId);
-  if (unfollowErr) return jsonError("Unable to unfollow", "internal_error", 500);
-
-  const { error: cancelErr } = await supabase
-    .from("follow_requests")
-    .delete()
-    .eq("requester_id", followerId)
-    .eq("target_id", targetId)
-    .eq("status", "pending");
-  if (cancelErr) return jsonError("Unable to cancel request", "internal_error", 500);
+  // Mutual friendship: removing a friend drops both follow edges.
+  const [unfollowA, unfollowB, cancelOut, cancelIn] = await Promise.all([
+    supabase.from("user_follows").delete().eq("follower_id", followerId).eq("following_id", targetId),
+    supabase.from("user_follows").delete().eq("follower_id", targetId).eq("following_id", followerId),
+    supabase
+      .from("follow_requests")
+      .delete()
+      .eq("requester_id", followerId)
+      .eq("target_id", targetId)
+      .eq("status", "pending"),
+    supabase
+      .from("follow_requests")
+      .delete()
+      .eq("requester_id", targetId)
+      .eq("target_id", followerId)
+      .eq("status", "pending")
+  ]);
+  if (unfollowA.error || unfollowB.error || cancelOut.error || cancelIn.error) {
+    return jsonError("Unable to unfollow", "internal_error", 500);
+  }
 
   return jsonData({ state: "none" as const });
 }

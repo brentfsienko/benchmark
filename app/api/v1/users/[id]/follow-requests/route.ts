@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createSupabaseAdmin, hasSupabase } from "@/src/lib/supabase/admin";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { getRequestActor, requireSelfOrAdmin } from "@/src/lib/request-auth";
+import { fetchUserSummaries } from "@/src/lib/user-summary";
 
 export async function GET(
   _request: NextRequest,
@@ -22,10 +23,14 @@ export async function GET(
     return jsonError("Unable to load follow requests", "internal_error", 500);
   }
 
-  return jsonData({
-    incoming: (incomingRes.data ?? []).map((r: { requester_id: string }) => r.requester_id),
-    outgoing: (outgoingRes.data ?? []).map((r: { target_id: string }) => r.target_id)
-  });
+  const incomingIds = (incomingRes.data ?? []).map((r: { requester_id: string }) => r.requester_id);
+  const outgoingIds = (outgoingRes.data ?? []).map((r: { target_id: string }) => r.target_id);
+  const [incoming, outgoing] = await Promise.all([
+    fetchUserSummaries(incomingIds),
+    fetchUserSummaries(outgoingIds)
+  ]);
+
+  return jsonData({ incoming, outgoing });
 }
 
 export async function POST(
@@ -68,15 +73,26 @@ export async function POST(
 
   if (action === "approve") {
     const now = new Date().toISOString();
-    const [updateReq, insertFollow] = await Promise.all([
+    // Mutual friendship: both follow each other after accept.
+    const [updateReq, followA, followB] = await Promise.all([
       supabase
         .from("follow_requests")
         .update({ status: "accepted", updated_at: now })
         .eq("requester_id", otherUserId)
         .eq("target_id", id),
-      supabase.from("user_follows").upsert({ follower_id: otherUserId, following_id: id }, { onConflict: "follower_id,following_id" })
+      supabase
+        .from("user_follows")
+        .upsert(
+          { follower_id: otherUserId, following_id: id },
+          { onConflict: "follower_id,following_id" }
+        ),
+      supabase
+        .from("user_follows")
+        .upsert({ follower_id: id, following_id: otherUserId }, { onConflict: "follower_id,following_id" })
     ]);
-    if (updateReq.error || insertFollow.error) return jsonError("Unable to approve request", "internal_error", 500);
+    if (updateReq.error || followA.error || followB.error) {
+      return jsonError("Unable to approve request", "internal_error", 500);
+    }
     return jsonData({ ok: true });
   }
 

@@ -10,7 +10,9 @@ import type {
   FollowRelationshipState,
   FollowRequests,
   LeaderboardEntry,
-  UserProfile
+  UserProfile,
+  UserSearchResult,
+  UserSummary
 } from "./types";
 
 type APIResponse<T> = {
@@ -252,6 +254,17 @@ export function listFollowers(userID: string): Promise<string[]> {
 
 export function listFollowing(userID: string): Promise<string[]> {
   return request<string[]>(`/users/${userID}/following`, { cache: "no-store" });
+}
+
+export function listFriends(userID: string): Promise<UserSummary[]> {
+  return request<UserSummary[]>(`/users/${userID}/friends`, { cache: "no-store" });
+}
+
+export function searchUsers(query: string, limit = 20): Promise<UserSearchResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return Promise.resolve([]);
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  return request<UserSearchResult[]>(`/users/search?${params.toString()}`, { cache: "no-store" });
 }
 
 export function followUser(_followerId: string, targetId: string): Promise<{ state: FollowRelationshipState }> {
