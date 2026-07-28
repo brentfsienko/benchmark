@@ -10,10 +10,9 @@ import {
   useRef,
   useState
 } from "react";
-import { createBench, deleteBench, getBench, getProfile, listBenchPins, listBenchReviews, listWishlist, searchBenches, updateBenchLocation } from "@/src/lib/api";
+import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, searchBenches, updateBenchLocation } from "@/src/lib/api";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
-import { BenchExploreSheet } from "@/src/components/bench-explore-sheet";
 import { Toast } from "@/src/components/toast";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import {
@@ -205,13 +204,9 @@ export default function ExplorePage() {
   const [addType, setAddType] = useState("wooden");
   const [addDescription, setAddDescription] = useState("");
   const [locating, setLocating] = useState(false);
-  const [sheetBenchID, setSheetBenchID] = useState<string | null>(null);
-  const [sheetPin, setSheetPin] = useState<BenchPin | null>(null);
-  const [sheetLoading, setSheetLoading] = useState(false);
   const [carouselPad, setCarouselPad] = useState(48);
   const [toast, setToast] = useState<string | null>(null);
   const toastKey = useRef(0);
-  const [wishlistIDs, setWishlistIDs] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BenchPin[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -455,11 +450,6 @@ export default function ExplorePage() {
       getProfile(profileId, { slim: true })
         .then((p) => setBenchmarkedIDs(p.benchmarkedBenchIDs))
         .catch(() => {});
-      listWishlist(profileId)
-        .then((ids) => setWishlistIDs(new Set(ids)))
-        .catch(() => {});
-    } else {
-      setWishlistIDs(new Set());
     }
   }, [profileId]);
 
@@ -497,15 +487,6 @@ export default function ExplorePage() {
     return () => document.removeEventListener("mousedown", onDoc);
   }, [searchQuery]);
 
-  const handleWishlistChange = useCallback((benchId: string, next: boolean) => {
-    setWishlistIDs((prev) => {
-      const copy = new Set(prev);
-      if (next) copy.add(benchId);
-      else copy.delete(benchId);
-      return copy;
-    });
-  }, []);
-
   useEffect(() => {
     if (carouselBenches.length > 0 && !selectedBenchID) {
       setSelectedBenchID(carouselBenches[0].id);
@@ -518,9 +499,8 @@ export default function ExplorePage() {
       (filters.tags && filters.tags.length > 0)
   );
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
-  const sheetCached = sheetBenchID ? detailCacheRef.current.get(sheetBenchID) : undefined;
 
-  // detailVersion bumps when prefetch finishes so sheet re-renders from cache.
+  // detailVersion bumps when prefetch finishes so carousel thumbs stay fresh.
   void detailVersion;
 
   const scrollCarouselToSelected = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -552,19 +532,11 @@ export default function ExplorePage() {
     }
   }, []);
 
-  const openBenchSheet = useCallback((bench: BenchPin) => {
+  const openBenchDetail = useCallback((bench: BenchPin) => {
     setSelectedBenchID(bench.id);
-    setSheetPin(bench);
-    setSheetBenchID(bench.id);
     trackEvent({ name: "bench_opened_from_explore", benchId: bench.id });
-    const cached = detailCacheRef.current.get(bench.id);
-    if (!cached?.fetchedWithPhotos) {
-      setSheetLoading(true);
-      prefetchBench(bench.id, { withPhotos: true }).finally(() => setSheetLoading(false));
-    } else {
-      setSheetLoading(false);
-    }
-  }, [prefetchBench]);
+    router.push(`/bench/${bench.id}`);
+  }, [router]);
 
   const handleSearchSelect = useCallback(
     (pin: BenchPin) => {
@@ -575,75 +547,15 @@ export default function ExplorePage() {
       setSearchResults([]);
       suppressPinFetchRef.current = true;
       flyToRef.current(pin.latitude, pin.longitude);
-      openBenchSheet(pin);
+      openBenchDetail(pin);
       trackEvent({ name: "bench_search_selected", benchId: pin.id });
     },
-    [openBenchSheet]
+    [openBenchDetail]
   );
-
-  const closeBenchSheet = useCallback(() => {
-    setSheetBenchID(null);
-    setSheetPin(null);
-    setSheetLoading(false);
-  }, []);
-
-  const handleSheetReviewsUpdated = useCallback((next: BenchReview[]) => {
-    if (!sheetBenchID) return;
-    const prev = detailCacheRef.current.get(sheetBenchID);
-    if (!prev) return;
-    detailCacheRef.current.set(sheetBenchID, { ...prev, reviews: next, fetchedWithPhotos: true });
-    setDetailVersion((v) => v + 1);
-  }, [sheetBenchID]);
 
   const showToast = useCallback((message: string) => {
     toastKey.current += 1;
     setToast(message);
-  }, []);
-
-  const handleDeleteBench = useCallback(async (benchId: string) => {
-    await deleteBench(benchId);
-    pinCacheRef.current.delete(benchId);
-    detailCacheRef.current.delete(benchId);
-    setBenches((prev) => prev.filter((b) => b.id !== benchId));
-    setSelectedBenchID((prev) => (prev === benchId ? null : prev));
-    setBenchmarkedIDs((prev) => prev.filter((id) => id !== benchId));
-    setDetailVersion((v) => v + 1);
-    showToast("bench deleted");
-    if (currentBoundsRef.current) {
-      await refresh(currentBoundsRef.current);
-    }
-  }, [refresh, showToast]);
-
-  const handleBenchUpdated = useCallback((updated: Bench) => {
-    const prevPin = pinCacheRef.current.get(updated.id);
-    const nextPin: BenchPin = {
-      id: updated.id,
-      name: updated.name,
-      neighborhood: updated.neighborhood,
-      type: updated.type,
-      averageRating: updated.averageRating,
-      latitude: updated.latitude || prevPin?.latitude || 0,
-      longitude: updated.longitude || prevPin?.longitude || 0,
-      reviewCount: prevPin?.reviewCount ?? 0,
-      tags: updated.tags?.length ? updated.tags : prevPin?.tags ?? []
-    };
-    pinCacheRef.current.set(updated.id, nextPin);
-    setBenches((prev) => prev.map((b) => (b.id === updated.id ? { ...b, ...nextPin } : b)));
-    setSheetPin((prev) => (prev?.id === updated.id ? { ...prev, ...nextPin } : prev));
-    const detail = detailCacheRef.current.get(updated.id);
-    if (detail) {
-      detailCacheRef.current.set(updated.id, {
-        ...detail,
-        bench: { ...detail.bench, ...updated, latitude: nextPin.latitude, longitude: nextPin.longitude }
-      });
-    } else {
-      detailCacheRef.current.set(updated.id, {
-        bench: { ...updated, latitude: nextPin.latitude, longitude: nextPin.longitude },
-        reviews: [],
-        fetchedWithPhotos: false
-      });
-    }
-    setDetailVersion((v) => v + 1);
   }, []);
 
   useEffect(() => {
@@ -663,17 +575,6 @@ export default function ExplorePage() {
     scrollCarouselToSelected("smooth");
     void prefetchBench(selectedBenchID);
   }, [selectedBenchID, carouselBenches, scrollCarouselToSelected, prefetchBench]);
-
-  useEffect(() => {
-    if (!sheetBenchID) return;
-    const cached = detailCacheRef.current.get(sheetBenchID);
-    if (cached?.fetchedWithPhotos) {
-      setSheetLoading(false);
-      return;
-    }
-    setSheetLoading(true);
-    prefetchBench(sheetBenchID, { withPhotos: true }).finally(() => setSheetLoading(false));
-  }, [sheetBenchID, prefetchBench]);
 
   const handleCarouselScroll = useCallback(() => {
     if (ignoreCarouselScrollRef.current) return;
@@ -706,23 +607,23 @@ export default function ExplorePage() {
 
   const handleSelectFromMap = useCallback((bench: BenchPin) => {
     if (bench.id === selectedBenchID) {
-      openBenchSheet(bench);
+      openBenchDetail(bench);
       return;
     }
     setSelectedBenchID(bench.id);
     suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
-  }, [selectedBenchID, openBenchSheet]);
+  }, [selectedBenchID, openBenchDetail]);
 
   const handleSelectFromCard = useCallback((bench: BenchPin) => {
     if (bench.id === selectedBenchID) {
-      openBenchSheet(bench);
+      openBenchDetail(bench);
       return;
     }
     setSelectedBenchID(bench.id);
     suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
-  }, [selectedBenchID, openBenchSheet]);
+  }, [selectedBenchID, openBenchDetail]);
 
   const handleMapReady = useCallback((flyTo: (lat: number, lng: number) => void) => {
     flyToRef.current = flyTo;
@@ -1414,7 +1315,7 @@ export default function ExplorePage() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      openBenchSheet(bench);
+                      openBenchDetail(bench);
                     }}
                     style={{
                       marginTop: 6,
@@ -1588,21 +1489,6 @@ export default function ExplorePage() {
         </div>
       )}
 
-      {sheetPin && (
-        <BenchExploreSheet
-          pin={sheetPin}
-          bench={sheetCached?.bench ?? null}
-          reviews={sheetCached?.reviews ?? []}
-          loading={sheetLoading && !sheetCached?.fetchedWithPhotos}
-          onClose={closeBenchSheet}
-          onReviewsUpdated={handleSheetReviewsUpdated}
-          onDelete={isAdmin ? handleDeleteBench : undefined}
-          onBenchUpdated={isAdmin ? handleBenchUpdated : undefined}
-          wishlisted={wishlistIDs.has(sheetPin.id)}
-          onWishlistChange={handleWishlistChange}
-          onToast={showToast}
-        />
-      )}
       {toast && <Toast key={toastKey.current} message={toast} onDone={() => setToast(null)} />}
     </div>
   );

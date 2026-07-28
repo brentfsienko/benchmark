@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { addWishlistItem, getBench, listBenchReviews, listWishlist, removeWishlistItem, submitBenchmark } from "@/src/lib/api";
@@ -20,6 +20,7 @@ import {
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { FollowButton } from "@/src/components/follow-button";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
+import { MapLightbox } from "@/src/components/map-lightbox";
 import { PhotoLightbox } from "@/src/components/photo-lightbox";
 import { Toast } from "@/src/components/toast";
 
@@ -78,6 +79,7 @@ function HeartIcon({ filled }: { filled: boolean }) {
 
 export default function BenchDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { profileId } = useAuth();
   const benchID = params.id;
   const [bench, setBench] = useState<Bench | null>(null);
@@ -88,6 +90,7 @@ export default function BenchDetailPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
   const [showAllPhotosModal, setShowAllPhotosModal] = useState(false);
   const [wishlisted, setWishlisted] = useState(false);
   const [wishlistLoading, setWishlistLoading] = useState(false);
@@ -305,8 +308,16 @@ export default function BenchDetailPage() {
 
   return (
     <section className="screen">
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <BenchmarkLogo size={32} />
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="button-secondary"
+          style={{ height: 34, padding: "0 12px", fontSize: 12 }}
+        >
+          ← back
+        </button>
       </div>
       {bench ? (
         <>
@@ -342,74 +353,119 @@ export default function BenchDetailPage() {
             </p>
           )}
 
-          <section className="surface-card" style={{ padding: 12, marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <h2 style={{ margin: 0, fontSize: 14 }}>bench location</h2>
+          <section style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <h2 style={{ margin: 0, fontSize: 15 }}>location & photos</h2>
               <Link
-                href={`https://www.google.com/maps/search/?api=1&query=${bench.latitude},${bench.longitude}`}
+                href={`https://www.google.com/maps/dir/?api=1&destination=${bench.latitude},${bench.longitude}`}
                 target="_blank"
                 rel="noreferrer"
-                style={{ fontSize: 12, color: "var(--accent)", fontWeight: 600 }}
+                style={{ fontSize: 13, color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}
               >
-                open maps →
+                directions
               </Link>
             </div>
-            <div style={{ borderRadius: "calc(var(--radius) - 2px)", overflow: "hidden", border: "1px solid var(--border)", height: 160 }}>
-              <MiniBenchMap latitude={bench.latitude} longitude={bench.longitude} markerLabel={bench.name} />
+            <div
+              className="feed-media-carousel"
+              style={{
+                display: "flex",
+                gap: 8,
+                overflowX: "auto",
+                scrollSnapType: "x mandatory",
+                WebkitOverflowScrolling: "touch",
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
+                paddingBottom: 2
+              }}
+            >
+              <button
+                type="button"
+                aria-label="Expand map"
+                onClick={() => setMapOpen(true)}
+                style={{
+                  flex: "0 0 132px",
+                  width: 132,
+                  height: 132,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                  isolation: "isolate",
+                  scrollSnapAlign: "start",
+                  background: "var(--elevated)",
+                  border: "1px solid var(--border)",
+                  padding: 0,
+                  cursor: "pointer",
+                  position: "relative"
+                }}
+              >
+                <MiniBenchMap
+                  latitude={bench.latitude}
+                  longitude={bench.longitude}
+                  markerLabel={bench.name}
+                  interactive={false}
+                />
+              </button>
+              {allPhotos.slice(0, 8).map((photo, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setSelectedPhoto(photo.src)}
+                  style={{
+                    flex: "0 0 132px",
+                    width: 132,
+                    height: 132,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                    scrollSnapAlign: "start",
+                    border: "1px solid var(--border)",
+                    padding: 0,
+                    cursor: "pointer",
+                    background: "none",
+                    flexShrink: 0
+                  }}
+                >
+                  <img
+                    src={photo.src}
+                    alt={`${bench.name} by ${photo.author}`}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
+                  />
+                </button>
+              ))}
+              {allPhotos.length > 8 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPhotosModal(true)}
+                  style={{
+                    flex: "0 0 132px",
+                    width: 132,
+                    height: 132,
+                    borderRadius: 12,
+                    border: "1px solid var(--border)",
+                    background: "rgba(96,88,71,0.35)",
+                    color: "#f6f5f1",
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "grid",
+                    placeItems: "center",
+                    textAlign: "center",
+                    padding: 8,
+                    scrollSnapAlign: "start",
+                    flexShrink: 0
+                  }}
+                >
+                  click for more
+                </button>
+              )}
             </div>
           </section>
 
-          {allPhotos.length > 0 && (
-            <div style={{ marginBottom: 20 }}>
-              <h2 style={{ fontSize: 16, marginBottom: 10 }}>community photos</h2>
-              <div className="photo-row-shell">
-                <div className="photo-row-scroll">
-                  {allPhotos.slice(0, 6).map((photo, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setSelectedPhoto(photo.src)}
-                      style={{
-                        border: "none", padding: 0, cursor: "pointer", background: "none", flexShrink: 0,
-                        borderRadius: "var(--radius)", overflow: "hidden", width: 94, height: 94
-                      }}
-                    >
-                      <img
-                        src={photo.src}
-                        alt={`${bench.name} by ${photo.author}`}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: "var(--radius)" }}
-                      />
-                    </button>
-                  ))}
-                  {allPhotos.length > 6 && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAllPhotosModal(true)}
-                      style={{
-                        flexShrink: 0,
-                        width: 94,
-                        height: 94,
-                        borderRadius: 12,
-                        border: "1px solid var(--border)",
-                        background: "rgba(96,88,71,0.35)",
-                        color: "#f6f5f1",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: "pointer",
-                        display: "grid",
-                        placeItems: "center",
-                        textAlign: "center",
-                        padding: 8
-                      }}
-                    >
-                      click for more
-                    </button>
-                  )}
-                </div>
-                <div className="photo-row-fade" />
-              </div>
-            </div>
-          )}
+          <MapLightbox
+            open={mapOpen}
+            latitude={bench.latitude}
+            longitude={bench.longitude}
+            label={bench.name}
+            onClose={() => setMapOpen(false)}
+          />
 
           {showAllPhotosModal && (
             <div
