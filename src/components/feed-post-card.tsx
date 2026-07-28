@@ -372,37 +372,40 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
       <div style={{ padding: "10px 14px 6px", display: "flex", justifyContent: "space-between", gap: 12 }}>
         <p className="muted" style={{ margin: 0, fontSize: 12 }}>
           {likeCount} {likeCount === 1 ? "like" : "likes"}
+          {commentCount > 0 ? ` · ${commentCount} ${commentCount === 1 ? "comment" : "comments"}` : ""}
         </p>
-        <button
-          type="button"
-          onClick={() => void openComments()}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 12, padding: 0 }}
-        >
-          {commentCount} {commentCount === 1 ? "comment" : "comments"}
-        </button>
       </div>
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          borderTop: "1px solid var(--border)",
-          borderBottom: commentsOpen ? "1px solid var(--border)" : "none"
+          display: "flex",
+          gap: 18,
+          padding: "4px 14px 12px",
+          borderTop: commentsOpen ? "1px solid var(--border)" : "none"
         }}
       >
-        <button type="button" onClick={() => void toggleLike()} disabled={!viewerId} style={actionBtnStyle}>
-          {liked ? "♥ liked" : "♡ like"}
+        <button
+          type="button"
+          onClick={() => void toggleLike()}
+          disabled={!viewerId}
+          style={{
+            ...actionBtnStyle,
+            color: liked ? "var(--accent)" : "var(--text-secondary)",
+            fontWeight: liked ? 600 : 500
+          }}
+        >
+          {liked ? "liked" : "like"}
         </button>
         <button type="button" onClick={() => void openComments()} disabled={!viewerId} style={actionBtnStyle}>
-          💬 comment
+          comment
         </button>
-        <button type="button" onClick={() => void share()} style={{ ...actionBtnStyle, borderRight: "none" }}>
-          ↗ share
+        <button type="button" onClick={() => void share()} style={actionBtnStyle}>
+          share
         </button>
       </div>
 
       {commentsOpen ? (
-        <div style={{ padding: 14, display: "grid", gap: 10 }}>
+        <div style={{ padding: "0 14px 14px", display: "grid", gap: 10, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           {comments.map((c) => (
             <div key={c.id} style={{ display: "flex", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -441,10 +444,9 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
 const actionBtnStyle: CSSProperties = {
   background: "none",
   border: "none",
-  borderRight: "1px solid var(--border)",
-  padding: "10px 4px",
+  padding: 0,
   cursor: "pointer",
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 500,
   color: "var(--text-secondary)"
 };
