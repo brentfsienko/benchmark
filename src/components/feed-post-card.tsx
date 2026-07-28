@@ -346,6 +346,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 height: mediaSize,
                 borderRadius: 12,
                 overflow: "hidden",
+                isolation: "isolate",
                 scrollSnapAlign: "start",
                 background: "var(--elevated)",
                 position: "relative"

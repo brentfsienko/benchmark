@@ -1445,7 +1445,7 @@ export default function ExplorePage() {
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 60,
+            zIndex: 300,
             background: "rgba(0,0,0,0.4)",
             display: "flex",
             alignItems: "flex-end",

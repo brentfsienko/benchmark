@@ -155,7 +155,7 @@ export default function OnboardingPage() {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 60,
+        zIndex: 300,
         background: "var(--page)",
         display: "flex",
         flexDirection: "column",

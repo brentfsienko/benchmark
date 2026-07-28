@@ -541,7 +541,7 @@ export function BenchExploreSheet({
         position: "fixed",
         inset: 0,
         // Above bottom nav so the sheet isn't tucked under it / cropping photos.
-        zIndex: 60,
+        zIndex: 300,
         display: "flex",
         flexDirection: "column",
         justifyContent: "flex-end",
