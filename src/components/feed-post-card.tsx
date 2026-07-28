@@ -113,8 +113,8 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   }, [item.latitude, item.longitude, item.photoBase64Items]);
 
   const multiSlide = slides.length > 1;
-  // Leave a peek of the next slide (~12%) when there are multiple.
-  const slideWidth = multiSlide ? "88%" : "100%";
+  // Phone-sized square tiles; peek of the next slide when there are multiple.
+  const mediaSize = 176;
 
   const likeInFlightRef = useRef(false);
 
@@ -331,7 +331,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             overflowX: "auto",
             scrollSnapType: "x mandatory",
             WebkitOverflowScrolling: "touch",
-            padding: multiSlide ? "0 14px" : 0,
+            padding: "0 14px",
             scrollbarWidth: "none",
             msOverflowStyle: "none"
           }}
@@ -341,9 +341,10 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             <div
               key={i}
               style={{
-                flex: `0 0 ${slideWidth}`,
-                aspectRatio: "1 / 1",
-                borderRadius: multiSlide ? 10 : 0,
+                flex: `0 0 ${mediaSize}px`,
+                width: mediaSize,
+                height: mediaSize,
+                borderRadius: 12,
                 overflow: "hidden",
                 scrollSnapAlign: "start",
                 background: "var(--elevated)",
