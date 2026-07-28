@@ -48,15 +48,15 @@ function Avatar({ name, url }: { name: string; url?: string }) {
       <img
         src={url}
         alt=""
-        style={{ width: 32, height: 32, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
+        style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "cover", border: "1px solid var(--border)" }}
       />
     );
   }
   return (
     <div
       style={{
-        width: 32,
-        height: 32,
+        width: 40,
+        height: 40,
         borderRadius: "50%",
         background: "var(--accent-soft)",
         border: "1.5px solid var(--accent)",
@@ -64,7 +64,7 @@ function Avatar({ name, url }: { name: string; url?: string }) {
         placeItems: "center",
         fontWeight: 700,
         color: "var(--accent)",
-        fontSize: 13
+        fontSize: 15
       }}
     >
       {(name || "?").charAt(0).toUpperCase()}
@@ -113,9 +113,8 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   }, [item.latitude, item.longitude, item.photoBase64Items]);
 
   const multiSlide = slides.length > 1;
-  // Leave a peek of the next card (~12%) when there are multiple slides.
+  // Leave a peek of the next slide (~12%) when there are multiple.
   const slideWidth = multiSlide ? "88%" : "100%";
-  const slideHeight = multiSlide ? 168 : 180;
 
   const toggleLike = async () => {
     if (!viewerId || busy) return;
@@ -199,15 +198,15 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
 
   return (
     <article className="surface-card" style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "10px 12px 6px", display: "flex", gap: 8, alignItems: "flex-start" }}>
+      <div style={{ padding: "14px 14px 10px", display: "flex", gap: 10, alignItems: "flex-start" }}>
         <Link href={`/user/${item.userId}`} style={{ flexShrink: 0 }}>
           <Avatar name={authorName} url={item.avatarPhotoURL} />
         </Link>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Link href={`/user/${item.userId}`} style={{ fontWeight: 700, fontSize: 13, textDecoration: "none", color: "var(--text-primary)" }}>
+          <Link href={`/user/${item.userId}`} style={{ fontWeight: 700, fontSize: 14, textDecoration: "none", color: "var(--text-primary)" }}>
             {authorName}
           </Link>
-          <p className="muted" style={{ margin: "1px 0 0", fontSize: 11 }}>
+          <p className="muted" style={{ margin: "2px 0 0", fontSize: 12 }}>
             🪑 {formatWhen(item.createdAt)}
             {location ? ` · ${location}` : ""}
           </p>
@@ -218,7 +217,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               type="button"
               aria-label="Post options"
               onClick={() => setMenuOpen((v) => !v)}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 16, lineHeight: 1, padding: 2 }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 18, lineHeight: 1, padding: 4 }}
             >
               ···
             </button>
@@ -227,11 +226,11 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 style={{
                   position: "absolute",
                   right: 0,
-                  top: 24,
+                  top: 28,
                   background: "var(--elevated)",
                   border: "1px solid var(--border)",
                   borderRadius: 10,
-                  minWidth: 110,
+                  minWidth: 120,
                   zIndex: 5,
                   boxShadow: "0 8px 24px rgba(0,0,0,0.08)"
                 }}
@@ -239,7 +238,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 <button
                   type="button"
                   className="button-secondary"
-                  style={{ width: "100%", border: "none", borderRadius: 10, textAlign: "left", fontSize: 12 }}
+                  style={{ width: "100%", border: "none", borderRadius: 10, textAlign: "left" }}
                   onClick={() => {
                     setEditing(true);
                     setMenuOpen(false);
@@ -253,26 +252,26 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
         ) : null}
       </div>
 
-      <div style={{ padding: "0 12px 8px" }}>
+      <div style={{ padding: "0 14px 10px" }}>
         <Link href={`/bench/${item.benchId}`} style={{ textDecoration: "none", color: "inherit" }}>
-          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{item.benchName}</h2>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{item.benchName}</h2>
         </Link>
-        <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", gap: 16, marginTop: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
           <div>
-            <p className="muted" style={{ margin: 0, fontSize: 10 }}>Rating</p>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>
+            <p className="muted" style={{ margin: 0, fontSize: 11 }}>Rating</p>
+            <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
               {item.rating != null ? <StarRating rating={item.rating} /> : "—"}
             </p>
           </div>
           {(item.photoBase64Items?.length ?? 0) > 0 ? (
             <div>
-              <p className="muted" style={{ margin: 0, fontSize: 10 }}>Photos</p>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{item.photoBase64Items?.length}</p>
+              <p className="muted" style={{ margin: 0, fontSize: 11 }}>Photos</p>
+              <p style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>{item.photoBase64Items?.length}</p>
             </div>
           ) : null}
         </div>
         {editing ? (
-          <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
             <label style={{ fontSize: 12 }}>
               rating
               <input
@@ -290,7 +289,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               <textarea
                 value={editBody}
                 onChange={(e) => setEditBody(e.target.value)}
-                rows={2}
+                rows={3}
                 style={{ width: "100%", marginTop: 4 }}
               />
             </label>
@@ -304,7 +303,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             </div>
           </div>
         ) : item.body ? (
-          <p style={{ margin: "8px 0 0", fontSize: 13, lineHeight: 1.4, color: "var(--text-secondary)" }}>
+          <p style={{ margin: "10px 0 0", fontSize: 14, lineHeight: 1.45, color: "var(--text-secondary)" }}>
             {item.body}
           </p>
         ) : null}
@@ -318,7 +317,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             overflowX: "auto",
             scrollSnapType: "x mandatory",
             WebkitOverflowScrolling: "touch",
-            padding: multiSlide ? "0 12px 0 12px" : 0,
+            padding: multiSlide ? "0 14px" : 0,
             scrollbarWidth: "none",
             msOverflowStyle: "none"
           }}
@@ -329,7 +328,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               key={i}
               style={{
                 flex: `0 0 ${slideWidth}`,
-                height: slideHeight,
+                aspectRatio: "1 / 1",
                 borderRadius: multiSlide ? 10 : 0,
                 overflow: "hidden",
                 scrollSnapAlign: "start",
@@ -351,19 +350,18 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               ) : null}
             </div>
           ))}
-          {/* Trailing spacer so the last slide can still show a peek feel when scrolling back */}
           {multiSlide ? <div style={{ flex: "0 0 4px" }} aria-hidden /> : null}
         </div>
       ) : null}
 
-      <div style={{ padding: "8px 12px 4px", display: "flex", justifyContent: "space-between", gap: 12 }}>
-        <p className="muted" style={{ margin: 0, fontSize: 11 }}>
+      <div style={{ padding: "10px 14px 6px", display: "flex", justifyContent: "space-between", gap: 12 }}>
+        <p className="muted" style={{ margin: 0, fontSize: 12 }}>
           {likeCount} {likeCount === 1 ? "like" : "likes"}
         </p>
         <button
           type="button"
           onClick={() => void openComments()}
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 11, padding: 0 }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 12, padding: 0 }}
         >
           {commentCount} {commentCount === 1 ? "comment" : "comments"}
         </button>
@@ -389,11 +387,11 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
       </div>
 
       {commentsOpen ? (
-        <div style={{ padding: 12, display: "grid", gap: 8 }}>
+        <div style={{ padding: 14, display: "grid", gap: 10 }}>
           {comments.map((c) => (
             <div key={c.id} style={{ display: "flex", gap: 8 }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontSize: 12 }}>
+                <p style={{ margin: 0, fontSize: 13 }}>
                   <strong>{c.author}</strong>{" "}
                   <span style={{ color: "var(--text-secondary)" }}>{c.body}</span>
                 </p>
@@ -406,7 +404,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 value={commentDraft}
                 onChange={(e) => setCommentDraft(e.target.value)}
                 placeholder="Add a comment…"
-                style={{ flex: 1, fontSize: 13 }}
+                style={{ flex: 1 }}
               />
               <button type="submit" className="button-primary" disabled={busy || !commentDraft.trim()}>
                 post
@@ -417,7 +415,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
       ) : null}
 
       {status ? (
-        <p className="muted" style={{ margin: 0, padding: "0 12px 10px", fontSize: 11 }}>
+        <p className="muted" style={{ margin: 0, padding: "0 14px 12px", fontSize: 12 }}>
           {status}
         </p>
       ) : null}
@@ -429,9 +427,9 @@ const actionBtnStyle: CSSProperties = {
   background: "none",
   border: "none",
   borderRight: "1px solid var(--border)",
-  padding: "8px 4px",
+  padding: "10px 4px",
   cursor: "pointer",
-  fontSize: 12,
+  fontSize: 13,
   fontWeight: 600,
   color: "var(--text-secondary)"
 };
