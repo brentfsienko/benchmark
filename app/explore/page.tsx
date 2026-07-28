@@ -90,6 +90,20 @@ function padBounds(bounds: ViewportBounds, factor = 0.35): ViewportBounds {
   };
 }
 
+/** True when `inner` viewport is fully inside a previously fetched `outer` region. */
+function boundsFullyInside(inner: ViewportBounds, outer: ViewportBounds): boolean {
+  if (inner.sw_lat < outer.sw_lat - 1e-9 || inner.ne_lat > outer.ne_lat + 1e-9) return false;
+  // Antimeridian: be conservative and refetch.
+  if (inner.sw_lng > inner.ne_lng || outer.sw_lng > outer.ne_lng) return false;
+  return inner.sw_lng >= outer.sw_lng - 1e-9 && inner.ne_lng <= outer.ne_lng + 1e-9;
+}
+
+type FetchedPinRegion = {
+  bounds: ViewportBounds;
+  minRating?: number;
+  zoom: number;
+};
+
 function evictPinCache(cache: Map<string, BenchPin>, keepNear: ViewportBounds | null) {
   if (!keepNear) {
     if (cache.size > PIN_CACHE_MAX) cache.clear();
@@ -213,6 +227,9 @@ export default function ExplorePage() {
   const [bootView, setBootView] = useState<SavedMapView | null>(null);
   const pinFetchGenRef = useRef(0);
   const pinAbortRef = useRef<AbortController | null>(null);
+  const fetchedRegionRef = useRef<FetchedPinRegion | null>(null);
+  /** Skip network refetch after programmatic flyTo (selection / locate / search). */
+  const suppressPinFetchRef = useRef(false);
 
   useEffect(() => {
     if (!isOnboardingComplete()) {
@@ -272,8 +289,11 @@ export default function ExplorePage() {
     const ac = new AbortController();
     pinAbortRef.current = ac;
     const gen = ++pinFetchGenRef.current;
+    // Fetch a padded region so small pans / walks stay covered by cache.
+    const fetchBounds = padBounds(bounds, 0.5);
+    const minRating = filtersRef.current.minRating;
     try {
-      const data = await listBenchPins(bounds, filtersRef.current.minRating, {
+      const data = await listBenchPins(fetchBounds, minRating, {
         signal: ac.signal
       });
       if (gen !== pinFetchGenRef.current) return;
@@ -282,6 +302,11 @@ export default function ExplorePage() {
         cache.set(pin.id, pin);
       }
       evictPinCache(cache, bounds);
+      fetchedRegionRef.current = {
+        bounds: fetchBounds,
+        minRating,
+        zoom: bounds.zoom ?? 0
+      };
       const filtered = applyFilters(cache, filtersRef.current, bounds);
       setBenches(filtered);
       setLoading(false);
@@ -304,6 +329,24 @@ export default function ExplorePage() {
     const filtered = applyFilters(pinCacheRef.current, filtersRef.current, bounds);
     setBenches(filtered);
     setSelectedBenchID((prev) => pickSelection(prev, filtered, bounds));
+
+    const suppress = suppressPinFetchRef.current;
+    if (suppress) suppressPinFetchRef.current = false;
+
+    const fetched = fetchedRegionRef.current;
+    const minRating = filtersRef.current.minRating;
+    const zoom = bounds.zoom ?? 0;
+    const covered =
+      fetched != null &&
+      fetched.minRating === minRating &&
+      Math.abs(zoom - fetched.zoom) < 0.75 &&
+      boundsFullyInside(bounds, fetched.bounds);
+
+    // Programmatic camera moves (flyTo) usually stay inside the padded region —
+    // skip network unless the viewport left coverage.
+    if (suppress && covered) return;
+    if (covered) return;
+
     refresh(bounds).catch(() => {});
   }, [applyFilters, pickSelection, refresh]);
 
@@ -342,11 +385,19 @@ export default function ExplorePage() {
     };
   }, [refresh]);
 
+  const prevMinRatingRef = useRef(filters.minRating);
   useEffect(() => {
     const filtered = applyFilters(pinCacheRef.current, filters, currentBoundsRef.current);
     setBenches(filtered);
     setSelectedBenchID((prev) => pickSelection(prev, filtered, currentBoundsRef.current));
-  }, [filters, applyFilters, pickSelection]);
+    if (prevMinRatingRef.current !== filters.minRating) {
+      prevMinRatingRef.current = filters.minRating;
+      fetchedRegionRef.current = null;
+      if (currentBoundsRef.current) {
+        refresh(currentBoundsRef.current).catch(() => {});
+      }
+    }
+  }, [filters, applyFilters, pickSelection, refresh]);
 
   const carouselBenches = useMemo(() => {
     if (!viewportBounds) return benches.slice(0, 12);
@@ -522,6 +573,7 @@ export default function ExplorePage() {
       setSearchOpen(false);
       setSearchExpanded(false);
       setSearchResults([]);
+      suppressPinFetchRef.current = true;
       flyToRef.current(pin.latitude, pin.longitude);
       openBenchSheet(pin);
       trackEvent({ name: "bench_search_selected", benchId: pin.id });
@@ -645,6 +697,7 @@ export default function ExplorePage() {
         const bench = carouselBenches.find((b) => b.id === bestId);
         if (bench) {
           setSelectedBenchID(bench.id);
+          suppressPinFetchRef.current = true;
           flyToRef.current(bench.latitude, bench.longitude);
         }
       }
@@ -657,6 +710,7 @@ export default function ExplorePage() {
       return;
     }
     setSelectedBenchID(bench.id);
+    suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
   }, [selectedBenchID, openBenchSheet]);
 
@@ -666,6 +720,7 @@ export default function ExplorePage() {
       return;
     }
     setSelectedBenchID(bench.id);
+    suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
   }, [selectedBenchID, openBenchSheet]);
 

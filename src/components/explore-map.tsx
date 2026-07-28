@@ -148,7 +148,7 @@ export function ExploreMap({
   const emitBounds = useCallback(
     (map: LeafletMap) => {
       if (boundsTimerRef.current) clearTimeout(boundsTimerRef.current);
-      boundsTimerRef.current = setTimeout(() => pushBounds(map), 300);
+      boundsTimerRef.current = setTimeout(() => pushBounds(map), 450);
     },
     [pushBounds]
   );
@@ -470,26 +470,33 @@ export function ExploreMap({
 
     void import("leaflet").then((leafletMod) => {
       const L = leafletMod.default;
-      if (cluster) {
-        markersRef.current.forEach((m) => {
-          try {
-            cluster.removeLayer(m);
-          } catch {
-            m.remove();
-          }
-        });
-        cluster.clearLayers();
-      } else {
-        markersRef.current.forEach((m) => m.remove());
-      }
-      markersRef.current = [];
-      markersByIdRef.current.clear();
-
       const bmSet = new Set(benchmarkedBenchIDs);
       const selected = selectedBenchIDRef.current;
-      const markers: Marker[] = [];
+      const nextIds = new Set(benches.map((b) => b.id));
 
+      // Remove markers that left the viewport set.
+      markersByIdRef.current.forEach((marker, id) => {
+        if (nextIds.has(id)) return;
+        try {
+          if (cluster) cluster.removeLayer(marker);
+          else marker.remove();
+        } catch {
+          marker.remove();
+        }
+        markersByIdRef.current.delete(id);
+      });
+
+      const added: Marker[] = [];
       benches.forEach((bench) => {
+        const existing = markersByIdRef.current.get(bench.id);
+        if (existing) {
+          const ll = existing.getLatLng();
+          if (ll.lat !== bench.latitude || ll.lng !== bench.longitude) {
+            existing.setLatLng([bench.latitude, bench.longitude]);
+          }
+          return;
+        }
+
         const isSelected = !addMode && bench.id === selected;
         const isBenchmarked = bmSet.has(bench.id);
         const size = isSelected ? 32 : 24;
@@ -509,13 +516,16 @@ export function ExploreMap({
             onSelectBenchRef.current(current);
           }
         });
-        markers.push(marker);
         markersByIdRef.current.set(bench.id, marker);
+        added.push(marker);
       });
 
-      if (cluster) cluster.addLayers(markers);
-      else markers.forEach((m) => m.addTo(map));
-      markersRef.current = markers;
+      if (added.length > 0) {
+        if (cluster) cluster.addLayers(added);
+        else added.forEach((m) => m.addTo(map));
+      }
+
+      markersRef.current = Array.from(markersByIdRef.current.values());
     });
     // Intentionally omit selectedBenchID — selection is a cheap icon refresh below.
   }, [mounted, mapReady, clusterReady, benches, addMode, benchmarkedBenchIDs]);

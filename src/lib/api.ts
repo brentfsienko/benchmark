@@ -220,15 +220,15 @@ export function deleteBenchmark(reviewId: string): Promise<{ ok: boolean }> {
   return request<{ ok: boolean }>(`/reviews/${reviewId}`, { method: "DELETE" });
 }
 
-export function likeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount: number }> {
-  return request<{ liked: boolean; likeCount: number }>(`/reviews/${reviewId}/like`, {
+export function likeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount?: number }> {
+  return request<{ liked: boolean; likeCount?: number }>(`/reviews/${reviewId}/like`, {
     method: "POST",
     body: JSON.stringify({})
   });
 }
 
-export function unlikeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount: number }> {
-  return request<{ liked: boolean; likeCount: number }>(`/reviews/${reviewId}/like`, {
+export function unlikeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount?: number }> {
+  return request<{ liked: boolean; likeCount?: number }>(`/reviews/${reviewId}/like`, {
     method: "DELETE"
   });
 }

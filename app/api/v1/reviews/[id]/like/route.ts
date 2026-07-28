@@ -13,23 +13,17 @@ export async function POST(
   if (!actor?.profileId) return jsonError("Authentication required", "unauthorized", 401);
 
   const supabase = createSupabaseServer();
-  const { data: review } = await supabase.from("bench_reviews").select("id").eq("id", reviewId).maybeSingle();
-  if (!review) return jsonError("Review not found", "not_found", 404);
-
+  // Skip pre-check + recount: FK enforces review exists; client owns optimistic count.
   const { error } = await supabase
     .from("review_likes")
     .upsert({ review_id: reviewId, user_id: actor.profileId }, { onConflict: "review_id,user_id" });
   if (error) {
     console.error("like upsert error:", error);
+    if (error.code === "23503") return jsonError("Review not found", "not_found", 404);
     return jsonError("Unable to like review", "internal_error", 500);
   }
 
-  const { count } = await supabase
-    .from("review_likes")
-    .select("*", { count: "exact", head: true })
-    .eq("review_id", reviewId);
-
-  return jsonData({ liked: true, likeCount: count ?? 0 });
+  return jsonData({ liked: true });
 }
 
 export async function DELETE(
@@ -49,10 +43,5 @@ export async function DELETE(
     .eq("user_id", actor.profileId);
   if (error) return jsonError("Unable to unlike review", "internal_error", 500);
 
-  const { count } = await supabase
-    .from("review_likes")
-    .select("*", { count: "exact", head: true })
-    .eq("review_id", reviewId);
-
-  return jsonData({ liked: false, likeCount: count ?? 0 });
+  return jsonData({ liked: false });
 }
