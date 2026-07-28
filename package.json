@@ -16,7 +16,8 @@
     "import:benches:photos": "node scripts/bench-importer/fetch-photos.js",
     "import:benches": "node scripts/import-benches-to-db.js",
     "import:benches:rename": "node scripts/bench-importer/rename-benches.js",
-    "import:benches:types": "node scripts/bench-importer/normalize-bench-types.js"
+    "import:benches:types": "node scripts/bench-importer/normalize-bench-types.js",
+    "email:test": "node scripts/send-test-email.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
@@ -31,6 +32,8 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-leaflet": "^5.0.0",
+    "resend": "^6.18.0",
+    "standardwebhooks": "^1.0.0",
     "zod": "^3.24.2"
   },
   "devDependencies": {

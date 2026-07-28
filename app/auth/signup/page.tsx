@@ -1,12 +1,20 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowser } from "@/src/lib/supabase/client";
 import Link from "next/link";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { isReservedUsername } from "@/src/lib/admin";
-import { safeRedirectPath } from "@/src/lib/safe-redirect";
+import { getAuthRedirectOrigin, safeRedirectPath } from "@/src/lib/safe-redirect";
+
+function authEmailErrorMessage(raw: string): string {
+  const msg = raw.toLowerCase();
+  if (msg.includes("rate limit") || msg.includes("over_email")) {
+    return "too many verification emails sent — wait a bit and try again. if this keeps happening, custom email delivery (Resend) still needs to be enabled.";
+  }
+  return raw;
+}
 
 function SignupForm() {
   const searchParams = useSearchParams();
@@ -23,6 +31,16 @@ function SignupForm() {
   const [pendingVerifyEmail, setPendingVerifyEmail] = useState<string | null>(null);
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [resendCooldownAt, setResendCooldownAt] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (resendCooldownAt <= Date.now()) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [resendCooldownAt]);
+
+  const resendWaitSec = Math.max(0, Math.ceil((resendCooldownAt - now) / 1000));
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,7 +53,7 @@ function SignupForm() {
         return;
       }
       const supabase = createSupabaseBrowser();
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const redirectTo = `${getAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(next)}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -45,7 +63,7 @@ function SignupForm() {
         }
       });
       if (error) {
-        setStatus(error.message);
+        setStatus(authEmailErrorMessage(error.message));
         return;
       }
       if (data.user?.identities?.length === 0) {
@@ -66,21 +84,22 @@ function SignupForm() {
   };
 
   const resendVerification = async () => {
-    if (!pendingVerifyEmail) return;
+    if (!pendingVerifyEmail || resendWaitSec > 0) return;
     setResending(true);
     setResendStatus(null);
     try {
       const supabase = createSupabaseBrowser();
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+      const redirectTo = `${getAuthRedirectOrigin()}/auth/callback?next=${encodeURIComponent(next)}`;
       const { error } = await supabase.auth.resend({
         type: "signup",
         email: pendingVerifyEmail,
         options: { emailRedirectTo: redirectTo }
       });
       if (error) {
-        setResendStatus(error.message);
+        setResendStatus(authEmailErrorMessage(error.message));
         return;
       }
+      setResendCooldownAt(Date.now() + 60_000);
       setResendStatus("verification email sent again — check your inbox.");
     } catch (err) {
       setResendStatus(err instanceof Error ? err.message : "Could not resend email");
@@ -118,10 +137,14 @@ function SignupForm() {
           <button
             type="button"
             className="button-secondary"
-            disabled={resending}
+            disabled={resending || resendWaitSec > 0}
             onClick={() => void resendVerification()}
           >
-            {resending ? "sending…" : "resend verification email"}
+            {resending
+              ? "sending…"
+              : resendWaitSec > 0
+                ? `resend in ${resendWaitSec}s`
+                : "resend verification email"}
           </button>
           <Link
             href={`/auth/login?next=${encodeURIComponent(next)}`}

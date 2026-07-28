@@ -28,8 +28,64 @@ Single deploy: Next.js (Vercel) + Supabase (Postgres). No separate backend.
 4. Add environment variables:
    - `NEXT_PUBLIC_SUPABASE_URL` = your Supabase project URL
    - `SUPABASE_SERVICE_ROLE_KEY` = your Supabase service role key
+   - `NEXT_PUBLIC_SITE_URL` = `https://benchmark.rest`
    - `NEXT_PUBLIC_BENCHMARK_CURRENT_USER_ID` = `user-1` (optional)
 5. Deploy
+
+## 3b. Supabase Auth redirect URLs
+
+In [Authentication → URL Configuration](https://supabase.com/dashboard/project/ygpwlmfdhshobeotuzad/auth/url-configuration):
+
+1. **Site URL** → `https://benchmark.rest`
+2. **Redirect URLs** (allow list) include at least:
+   - `https://benchmark.rest/**`
+   - `http://localhost:3001/**` (local dev)
+   - optional preview: `https://*-your-team.vercel.app/**`
+
+Without this, email confirmation / magic links will reject `benchmark.rest` redirects.
+
+## 3c. Auth emails via Resend (required for production)
+
+Supabase’s **built-in** email sender is limited to **~2 emails/hour**. Benchmark sends auth mail through **Resend** via a Send Email hook in this app.
+
+### 1) Create Resend account + API key
+
+1. Sign up at [resend.com](https://resend.com) (free: 3,000 emails/mo, 100/day)
+2. Create an API key
+3. Optional but recommended: verify domain `benchmark.rest`, then send from `noreply@benchmark.rest`
+   - Until the domain is verified, use `Benchmark <onboarding@resend.dev>` (works for testing to your own inbox)
+
+### 2) Add Vercel / local env vars
+
+```
+RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM_EMAIL=Benchmark <noreply@benchmark.rest>
+SEND_EMAIL_HOOK_SECRET=v1,whsec_xxxxxxxxx
+NEXT_PUBLIC_SITE_URL=https://benchmark.rest
+```
+
+`SEND_EMAIL_HOOK_SECRET` is generated when you enable the hook in Supabase (next step). Paste the full value including the `v1,whsec_` prefix.
+
+### 3) Enable the Send Email hook in Supabase
+
+1. Open [Authentication → Hooks](https://supabase.com/dashboard/project/ygpwlmfdhshobeotuzad/auth/hooks)
+2. Enable **Send Email**
+3. HTTPS endpoint: `https://benchmark.rest/api/auth/send-email`
+4. Copy the generated secret into `SEND_EMAIL_HOOK_SECRET` on Vercel and redeploy
+5. Open [Authentication → Rate Limits](https://supabase.com/dashboard/project/ygpwlmfdhshobeotuzad/auth/rate-limits) and raise **Email sent** if needed (e.g. `100`/hour)
+
+Do **not** also rely on Supabase’s built-in SMTP once the hook is enabled — the hook replaces it.
+
+### Alternative: Resend SMTP (no app code)
+
+If you prefer dashboard-only SMTP instead of the hook:
+
+- Host `smtp.resend.com`, port `465`, user `resend`, password = Resend API key
+- Configure at [Authentication → SMTP](https://supabase.com/dashboard/project/ygpwlmfdhshobeotuzad/auth/smtp)
+
+### Temporary unblock (dev only)
+
+[Auth → Providers → Email](https://supabase.com/dashboard/project/ygpwlmfdhshobeotuzad/auth/providers) → turn off **Confirm email** until Resend is live.
 
 ## 4. Make the app public (everyone can open it)
 
