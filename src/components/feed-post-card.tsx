@@ -220,7 +220,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   };
 
   return (
-    <article className="surface-card" style={{ padding: 0, overflow: "hidden" }}>
+    <article className="feed-post" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ padding: "14px 14px 10px", display: "flex", gap: 10, alignItems: "flex-start" }}>
         <Link href={`/user/${item.userId}`} style={{ flexShrink: 0 }}>
           <Avatar name={authorName} url={item.avatarPhotoURL} />
@@ -340,7 +340,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
             overflowX: "auto",
             scrollSnapType: "x mandatory",
             WebkitOverflowScrolling: "touch",
-            padding: "0 14px",
+            padding: "0",
             scrollbarWidth: "none",
             msOverflowStyle: "none"
           }}
@@ -359,6 +359,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 flex: `0 0 ${mediaSize}px`,
                 width: mediaSize,
                 height: mediaSize,
+                marginLeft: i === 0 ? 14 : 0,
                 borderRadius: 12,
                 overflow: "hidden",
                 isolation: "isolate",

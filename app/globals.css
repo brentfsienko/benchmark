@@ -104,6 +104,25 @@ main {
   transition: box-shadow 0.2s, transform 0.15s;
 }
 
+/* Instagram-style edge-to-edge feed posts */
+.feed-list {
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  width: calc(100% + 2 * var(--space-4));
+}
+
+.feed-post {
+  background: var(--surface);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.feed-post:last-child {
+  border-bottom: none;
+}
+
 .muted {
   color: var(--text-secondary);
 }
