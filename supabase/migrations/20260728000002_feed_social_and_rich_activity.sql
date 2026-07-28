@@ -1,6 +1,24 @@
--- list_activity_feed: one-round-trip home/profile activity (rich feed payload).
--- Prefer supabase/feed_social_and_rich_activity.sql which also creates likes/comments.
--- Safe to re-run in Supabase SQL Editor.
+-- Social engagement on benchmarks + richer activity feed payloads.
+CREATE TABLE IF NOT EXISTS review_likes (
+  review_id TEXT NOT NULL REFERENCES bench_reviews(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (review_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS review_likes_user_idx ON review_likes (user_id);
+CREATE INDEX IF NOT EXISTS review_likes_review_idx ON review_likes (review_id);
+
+CREATE TABLE IF NOT EXISTS review_comments (
+  id TEXT PRIMARY KEY,
+  review_id TEXT NOT NULL REFERENCES bench_reviews(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS review_comments_review_created_idx
+  ON review_comments (review_id, created_at ASC);
 
 DROP FUNCTION IF EXISTS list_activity_feed(text, boolean, integer, timestamptz);
 

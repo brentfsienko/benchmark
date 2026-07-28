@@ -8,6 +8,8 @@ type MiniBenchMapProps = {
   latitude: number;
   longitude: number;
   markerLabel?: string;
+  /** Hide zoom controls (feed cards). */
+  interactive?: boolean;
 };
 
 function benchPinSvg(): string {
@@ -17,7 +19,12 @@ function benchPinSvg(): string {
   </svg>`;
 }
 
-export function MiniBenchMap({ latitude, longitude, markerLabel }: MiniBenchMapProps) {
+export function MiniBenchMap({
+  latitude,
+  longitude,
+  markerLabel,
+  interactive = true
+}: MiniBenchMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const markerRef = useRef<Marker | null>(null);
@@ -40,10 +47,18 @@ export function MiniBenchMap({ latitude, longitude, markerLabel }: MiniBenchMapP
         center: [latitude, longitude],
         zoom: 16,
         zoomControl: false,
-        attributionControl: false
+        attributionControl: false,
+        dragging: interactive,
+        scrollWheelZoom: interactive,
+        doubleClickZoom: interactive,
+        boxZoom: interactive,
+        keyboard: interactive,
+        touchZoom: interactive
       });
 
-      L.default.control.zoom({ position: "bottomright" }).addTo(map);
+      if (interactive) {
+        L.default.control.zoom({ position: "bottomright" }).addTo(map);
+      }
 
       L.default.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
         subdomains: "abcd",
@@ -69,7 +84,7 @@ export function MiniBenchMap({ latitude, longitude, markerLabel }: MiniBenchMapP
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [mounted, latitude, longitude, markerLabel]);
+  }, [mounted, latitude, longitude, markerLabel, interactive]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} aria-label="bench location map" />;
 }

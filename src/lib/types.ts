@@ -65,9 +65,28 @@ export type ActivityItem = {
   type: "benchmark";
   userId: string;
   author?: string;
+  username?: string;
+  avatarPhotoURL?: string;
   benchId: string;
   benchName: string;
+  neighborhood?: string;
+  latitude?: number;
+  longitude?: number;
   rating?: number;
+  body?: string;
+  photoBase64Items?: string[];
+  likeCount?: number;
+  commentCount?: number;
+  likedByMe?: boolean;
+  createdAt: string;
+};
+
+export type ReviewComment = {
+  id: string;
+  reviewId: string;
+  userId: string;
+  author: string;
+  body: string;
   createdAt: string;
 };
 

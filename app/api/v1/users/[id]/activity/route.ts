@@ -14,75 +14,155 @@ function parseLimit(raw: string | null, fallback: number): number {
   return Math.min(50, Math.max(1, Math.floor(n)));
 }
 
-function rowToItem(r: Record<string, unknown>): ActivityItem {
+function rowToItem(r: Record<string, unknown>, likedIds?: Set<string>): ActivityItem {
+  const id = String(r.id);
+  const photos = Array.isArray(r.photo_base64_items)
+    ? (r.photo_base64_items as unknown[]).map((p) => String(p)).filter(Boolean)
+    : [];
   return {
-    id: String(r.id),
+    id,
     type: "benchmark",
     userId: String(r.user_id),
     author: r.author ? String(r.author) : undefined,
+    username: r.username ? String(r.username) : undefined,
+    avatarPhotoURL: r.avatar_photo_url ? String(r.avatar_photo_url) : undefined,
     benchId: String(r.bench_id),
     benchName: String(r.bench_name ?? ""),
+    neighborhood: r.neighborhood ? String(r.neighborhood) : undefined,
+    latitude: Number.isFinite(Number(r.latitude)) ? Number(r.latitude) : undefined,
+    longitude: Number.isFinite(Number(r.longitude)) ? Number(r.longitude) : undefined,
     rating: Number(r.rating),
+    body: r.body != null ? String(r.body) : undefined,
+    photoBase64Items: photos,
+    likeCount: Number(r.like_count ?? 0),
+    commentCount: Number(r.comment_count ?? 0),
+    likedByMe: likedIds ? likedIds.has(id) : false,
     createdAt: new Date(String(r.created_at)).toISOString(),
   };
+}
+
+async function loadLikedSet(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  reviewIds: string[],
+  userId: string | null
+): Promise<Set<string>> {
+  if (!userId || reviewIds.length === 0) return new Set();
+  const { data } = await supabase
+    .from("review_likes")
+    .select("review_id")
+    .eq("user_id", userId)
+    .in("review_id", reviewIds);
+  return new Set((data ?? []).map((r: { review_id: string }) => r.review_id));
 }
 
 async function loadActivityFallback(
   supabase: ReturnType<typeof createSupabaseServer>,
   feedUserIds: string[],
   limit: number,
-  before: string | null
+  before: string | null,
+  viewerId: string | null
 ): Promise<ActivityItem[]> {
   let query = supabase
     .from("bench_reviews")
-    .select("id, user_id, bench_id, rating, created_at")
+    .select("id, user_id, bench_id, rating, body, photo_base64_items, created_at")
     .in("user_id", feedUserIds)
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (before) {
-    query = query.lt("created_at", before);
-  }
+  if (before) query = query.lt("created_at", before);
 
   const { data: reviewRows, error } = await query;
   if (error) throw error;
-
   const rows = reviewRows ?? [];
   if (rows.length === 0) return [];
 
   const benchIds = [...new Set(rows.map((r: { bench_id: string }) => r.bench_id))];
   const userIds = [...new Set(rows.map((r: { user_id: string }) => r.user_id))];
+  const reviewIds = rows.map((r: { id: string }) => r.id);
 
-  const [benchesRes, usersRes] = await Promise.all([
-    supabase.from("benches").select("id, name").in("id", benchIds),
-    supabase.from("users").select("id, display_name").in("id", userIds),
+  const [benchesRes, usersRes, likesRes, commentsRes, likedSet, coordsList] = await Promise.all([
+    supabase.from("benches").select("id, name, neighborhood").in("id", benchIds),
+    supabase.from("users").select("id, display_name, username, avatar_photo_url").in("id", userIds),
+    supabase.from("review_likes").select("review_id").in("review_id", reviewIds),
+    supabase.from("review_comments").select("review_id").in("review_id", reviewIds),
+    loadLikedSet(supabase, reviewIds, viewerId),
+    Promise.all(
+      benchIds.map(async (benchId) => {
+        const { data } = await supabase.rpc("get_bench_coords", { p_id: benchId });
+        const row = Array.isArray(data) ? data[0] : data;
+        return {
+          id: benchId,
+          latitude: Number(row?.latitude),
+          longitude: Number(row?.longitude)
+        };
+      })
+    )
   ]);
 
-  const benchNames = (benchesRes.data ?? []).reduce(
-    (acc: Record<string, string>, b: { id: string; name: string }) => {
-      acc[b.id] = b.name;
+  const benches = (benchesRes.data ?? []).reduce(
+    (acc: Record<string, { name: string; neighborhood: string }>, b: { id: string; name: string; neighborhood: string }) => {
+      acc[b.id] = { name: b.name, neighborhood: b.neighborhood ?? "" };
       return acc;
     },
     {}
   );
-  const userNames = (usersRes.data ?? []).reduce(
-    (acc: Record<string, string>, u: { id: string; display_name: string }) => {
-      acc[u.id] = u.display_name;
+  const users = (usersRes.data ?? []).reduce(
+    (
+      acc: Record<string, { display_name: string; username: string; avatar_photo_url: string }>,
+      u: { id: string; display_name: string; username: string; avatar_photo_url: string }
+    ) => {
+      acc[u.id] = u;
+      return acc;
+    },
+    {}
+  );
+  const likeCounts = (likesRes.data ?? []).reduce((acc: Record<string, number>, r: { review_id: string }) => {
+    acc[r.review_id] = (acc[r.review_id] ?? 0) + 1;
+    return acc;
+  }, {});
+  const commentCounts = (commentsRes.data ?? []).reduce((acc: Record<string, number>, r: { review_id: string }) => {
+    acc[r.review_id] = (acc[r.review_id] ?? 0) + 1;
+    return acc;
+  }, {});
+  const coords = coordsList.reduce(
+    (acc: Record<string, { latitude: number; longitude: number }>, c) => {
+      if (Number.isFinite(c.latitude) && Number.isFinite(c.longitude)) {
+        acc[c.id] = { latitude: c.latitude, longitude: c.longitude };
+      }
       return acc;
     },
     {}
   );
 
-  return rows.map((r: Record<string, unknown>) => ({
-    id: String(r.id),
-    type: "benchmark" as const,
-    userId: String(r.user_id),
-    author: userNames[String(r.user_id)] ?? undefined,
-    benchId: String(r.bench_id),
-    benchName: benchNames[String(r.bench_id)] ?? "",
-    rating: Number(r.rating),
-    createdAt: new Date(String(r.created_at)).toISOString(),
-  }));
+  return rows.map((r: Record<string, unknown>) => {
+    const benchId = String(r.bench_id);
+    const userId = String(r.user_id);
+    const id = String(r.id);
+    const u = users[userId];
+    const b = benches[benchId];
+    const c = coords[benchId];
+    return rowToItem(
+      {
+        id,
+        user_id: userId,
+        author: u?.display_name,
+        username: u?.username,
+        avatar_photo_url: u?.avatar_photo_url,
+        bench_id: benchId,
+        bench_name: b?.name ?? "",
+        neighborhood: b?.neighborhood ?? "",
+        latitude: c?.latitude,
+        longitude: c?.longitude,
+        rating: r.rating,
+        body: r.body,
+        photo_base64_items: r.photo_base64_items,
+        like_count: likeCounts[id] ?? 0,
+        comment_count: commentCounts[id] ?? 0,
+        created_at: r.created_at
+      },
+      likedSet
+    );
+  });
 }
 
 export async function GET(
@@ -123,7 +203,6 @@ export async function GET(
       if (!allowed) return jsonError("Forbidden", "forbidden", 403);
     }
 
-    // Prefer single-round-trip RPC when available.
     const { data: rpcRows, error: rpcError } = await supabase.rpc("list_activity_feed", {
       p_user_id: id,
       p_feed: feed,
@@ -132,11 +211,16 @@ export async function GET(
     });
 
     if (!rpcError) {
-      return jsonData((rpcRows ?? []).map((r: Record<string, unknown>) => rowToItem(r)));
+      const rows = (rpcRows ?? []) as Record<string, unknown>[];
+      const likedSet = await loadLikedSet(
+        supabase,
+        rows.map((r) => String(r.id)),
+        actor?.profileId ?? null
+      );
+      return jsonData(rows.map((r) => rowToItem(r, likedSet)));
     }
 
-    // Fallback if migration not applied yet.
-    if (!/list_activity_feed|Could not find the function/i.test(rpcError.message ?? "")) {
+    if (!/list_activity_feed|Could not find the function|photo_base64|like_count/i.test(rpcError.message ?? "")) {
       console.error("list_activity_feed error:", rpcError);
     }
 
@@ -155,7 +239,7 @@ export async function GET(
       ];
     }
 
-    const items = await loadActivityFallback(supabase, feedUserIds, limit, before);
+    const items = await loadActivityFallback(supabase, feedUserIds, limit, before, actor?.profileId ?? null);
     return jsonData(items);
   } catch (err) {
     console.error("activity route error:", err);
