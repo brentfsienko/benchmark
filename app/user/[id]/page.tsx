@@ -86,7 +86,7 @@ export default function PublicProfilePage() {
 
       {/* Follow button + stats */}
       <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
-        <FollowButton targetUserId={userId} />
+        <FollowButton targetUserId={userId} variant="friend" />
         <span className="muted">
           <strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers
         </span>

@@ -14,8 +14,9 @@ import {
   updateProfile
 } from "@/src/lib/api";
 import type { BenchCard } from "@/src/lib/api";
-import type { UserProfile } from "@/src/lib/types";
+import type { UserProfile, UserSummary } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
+import { FriendNavButton } from "@/src/components/friend-nav-button";
 import { trackEvent } from "@/src/lib/analytics";
 
 function PencilIcon() {
@@ -36,7 +37,7 @@ export default function ProfilePage() {
   const [wishlistBenches, setWishlistBenches] = useState<Record<string, BenchCard>>({});
   const [followers, setFollowers] = useState<string[]>([]);
   const [following, setFollowing] = useState<string[]>([]);
-  const [incomingRequests, setIncomingRequests] = useState<string[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<UserSummary[]>([]);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -120,7 +121,7 @@ export default function ProfilePage() {
 
   return (
     <section className="screen">
-      <SectionHeader title="profile" subtitle="your benchmark identity" />
+      <SectionHeader title="profile" subtitle="your benchmark identity" action={<FriendNavButton />} />
 
       {!user ? (
         <div className="surface-card" style={{ padding: 20 }}>
@@ -207,11 +208,11 @@ export default function ProfilePage() {
               <span className="muted" style={{ fontSize: 13 }}>
                 <strong style={{ color: "var(--text-primary)" }}>{profile.benchmarkCount ?? profile.benchmarkedBenchIDs.length}</strong> benchmark
               </span>
+              <Link href="/friends" className="muted" style={{ fontSize: 13, textDecoration: "none" }}>
+                <strong style={{ color: "var(--text-primary)" }}>{following.length}</strong> friends
+              </Link>
               <span className="muted" style={{ fontSize: 13 }}>
                 <strong style={{ color: "var(--text-primary)" }}>{followers.length}</strong> followers
-              </span>
-              <span className="muted" style={{ fontSize: 13 }}>
-                <strong style={{ color: "var(--text-primary)" }}>{following.length}</strong> following
               </span>
             </div>
           </div>
@@ -226,22 +227,30 @@ export default function ProfilePage() {
 
       {user && incomingRequests.length > 0 && (
         <section className="surface-card" style={{ padding: 14, marginBottom: 12 }}>
-          <h2 style={{ marginTop: 0, fontSize: 16 }}>
-            follow requests
-            <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>
-              ({incomingRequests.length})
-            </span>
-          </h2>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <h2 style={{ margin: 0, fontSize: 16 }}>
+              friend requests
+              <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 6 }}>
+                ({incomingRequests.length})
+              </span>
+            </h2>
+            <Link href="/friends" style={{ fontSize: 12, fontWeight: 600, color: "var(--accent)" }}>
+              see all
+            </Link>
+          </div>
           <div style={{ display: "grid", gap: 8 }}>
-            {incomingRequests.map((requesterId) => (
+            {incomingRequests.map((requester) => (
               <div
-                key={requesterId}
+                key={requester.id}
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}
               >
-                <Link href={`/user/${requesterId}`} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {requesterId}
+                <Link href={`/user/${requester.id}`} style={{ fontSize: 13, fontWeight: 600, minWidth: 0 }}>
+                  {requester.displayName || requester.username}
+                  <span className="muted" style={{ display: "block", fontSize: 11, fontWeight: 400 }}>
+                    @{requester.username}
+                  </span>
                 </Link>
-                <div style={{ display: "flex", gap: 6 }}>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                   <button
                     type="button"
                     className="button-secondary"
@@ -249,8 +258,8 @@ export default function ProfilePage() {
                     onClick={async () => {
                       if (!profileId) return;
                       try {
-                        await decideFollowRequest(profileId, requesterId, "reject");
-                        setIncomingRequests((prev) => prev.filter((id) => id !== requesterId));
+                        await decideFollowRequest(profileId, requester.id, "reject");
+                        setIncomingRequests((prev) => prev.filter((u) => u.id !== requester.id));
                         setStatus("request declined");
                       } catch (err) {
                         setStatus(err instanceof Error ? err.message : "unable to decline request");
@@ -266,16 +275,17 @@ export default function ProfilePage() {
                     onClick={async () => {
                       if (!profileId) return;
                       try {
-                        await decideFollowRequest(profileId, requesterId, "approve");
-                        setIncomingRequests((prev) => prev.filter((id) => id !== requesterId));
-                        setFollowers((prev) => (prev.includes(requesterId) ? prev : [...prev, requesterId]));
-                        setStatus("request approved");
+                        await decideFollowRequest(profileId, requester.id, "approve");
+                        setIncomingRequests((prev) => prev.filter((u) => u.id !== requester.id));
+                        setFollowers((prev) => (prev.includes(requester.id) ? prev : [...prev, requester.id]));
+                        setFollowing((prev) => (prev.includes(requester.id) ? prev : [...prev, requester.id]));
+                        setStatus("you are now friends");
                       } catch (err) {
                         setStatus(err instanceof Error ? err.message : "unable to approve request");
                       }
                     }}
                   >
-                    approve
+                    accept
                   </button>
                 </div>
               </div>

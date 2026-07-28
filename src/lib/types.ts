@@ -93,9 +93,20 @@ export type LeaderboardEntry = {
 
 export type FollowRelationshipState = "none" | "requested" | "following";
 
+export type UserSummary = {
+  id: string;
+  username: string;
+  displayName: string;
+  avatarPhotoURL?: string;
+};
+
 export type FollowRequests = {
-  incoming: string[];
-  outgoing: string[];
+  incoming: UserSummary[];
+  outgoing: UserSummary[];
+};
+
+export type UserSearchResult = UserSummary & {
+  relationship: FollowRelationshipState;
 };
 
 export type FriendChallengeProgress = {

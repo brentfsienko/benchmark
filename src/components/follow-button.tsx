@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useAuth } from "@/src/contexts/auth-context";
 import { decideFollowRequest, followUser, listFollowRequests, listFollowing, unfollowUser } from "@/src/lib/api";
 import type { FollowRelationshipState } from "@/src/lib/types";
@@ -8,9 +8,11 @@ import type { FollowRelationshipState } from "@/src/lib/types";
 type FollowButtonProps = {
   targetUserId: string;
   size?: "sm" | "md";
+  /** Friend-oriented labels for the friends/search UI. */
+  variant?: "follow" | "friend";
 };
 
-export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
+export function FollowButton({ targetUserId, size = "md", variant = "follow" }: FollowButtonProps) {
   const { profileId, user } = useAuth();
   const [state, setState] = useState<FollowRelationshipState>("none");
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,7 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
           setState("following");
           return;
         }
-        if (req.outgoing.includes(targetUserId)) {
+        if (req.outgoing.some((u) => u.id === targetUserId)) {
           setState("requested");
           return;
         }
@@ -62,7 +64,7 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
   if (isSelf || !user) return null;
   if (loading) return <span className="muted" style={{ fontSize: size === "sm" ? 11 : 13 }}>…</span>;
 
-  const btnStyle: React.CSSProperties =
+  const btnStyle: CSSProperties =
     size === "sm"
       ? { fontSize: 11, padding: "3px 8px", height: 24, lineHeight: "18px" }
       : {};
@@ -78,7 +80,17 @@ export function FollowButton({ targetUserId, size = "md" }: FollowButtonProps) {
         toggle();
       }}
     >
-      {state === "following" ? "following" : state === "requested" ? "requested" : "follow"}
+      {variant === "friend"
+        ? state === "following"
+          ? "friends"
+          : state === "requested"
+            ? "requested"
+            : "add friend"
+        : state === "following"
+          ? "following"
+          : state === "requested"
+            ? "requested"
+            : "follow"}
     </button>
   );
 }

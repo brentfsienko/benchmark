@@ -6,6 +6,7 @@ import { useAuth } from "@/src/contexts/auth-context";
 import { listActivity } from "@/src/lib/api";
 import type { ActivityItem } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
+import { FriendNavButton } from "@/src/components/friend-nav-button";
 import { trackEvent } from "@/src/lib/analytics";
 
 function StarRating({ rating }: { rating: number }) {
@@ -44,7 +45,7 @@ export default function HomePage() {
 
   return (
     <section className="screen">
-      <SectionHeader title="home" subtitle="your recent benchmarks" />
+      <SectionHeader title="home" subtitle="your recent benchmarks" action={<FriendNavButton />} />
       {!user && (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to view your feed</p>
