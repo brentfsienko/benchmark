@@ -1044,7 +1044,7 @@ export default function ExplorePage() {
         style={{
           position: "absolute",
           right: 16,
-          bottom: 220,
+          bottom: "calc(var(--nav-height) + var(--safe-bottom) + 118px)",
           zIndex: 3,
           display: "flex",
           flexDirection: "column",
@@ -1234,17 +1234,16 @@ export default function ExplorePage() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: "calc(var(--nav-height) + var(--safe-bottom) + 10px)",
           zIndex: 2,
-          padding: "12px 16px 96px",
-          background: "linear-gradient(to top, rgba(245,239,228,0.98) 0%, rgba(245,239,228,0.85) 60%, transparent 100%)",
-          borderTop: "1px solid rgba(218,207,191,0.5)"
+          padding: "8px 0 0",
+          background: "linear-gradient(to top, rgba(245,239,228,0.98) 0%, rgba(245,239,228,0.9) 55%, transparent 100%)",
         }}
       >
         {loading ? (
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>loading benches…</p>
+          <p className="muted" style={{ margin: "0 16px 8px", fontSize: 13 }}>loading benches…</p>
         ) : error ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "0 16px 8px" }}>
             <p style={{ margin: 0, fontSize: 13, color: "var(--danger)" }}>{error}</p>
             <button
               type="button"
@@ -1256,7 +1255,7 @@ export default function ExplorePage() {
             </button>
           </div>
         ) : carouselBenches.length === 0 ? (
-          <p className="muted" style={{ margin: 0, fontSize: 13 }}>
+          <p className="muted" style={{ margin: "0 16px 8px", fontSize: 13 }}>
             {benches.length > 0 ? "pan to center a bench" : "no benches nearby"}
           </p>
         ) : (
@@ -1268,7 +1267,7 @@ export default function ExplorePage() {
               display: "flex",
               gap: CAROUSEL_GAP,
               overflowX: "auto",
-              paddingBottom: 4,
+              paddingBottom: 2,
               paddingLeft: carouselPad,
               paddingRight: carouselPad,
               scrollSnapType: "x mandatory",
@@ -1294,7 +1293,7 @@ export default function ExplorePage() {
                   style={{
                     flexShrink: 0,
                     width: CAROUSEL_CARD_WIDTH,
-                    padding: 12,
+                    padding: "8px 10px",
                     borderRadius: "var(--radius)",
                     background: isSelected ? "var(--surface)" : "rgba(247,241,232,0.95)",
                     border: `1.5px solid ${isSelected ? "var(--accent)" : "var(--border)"}`,
@@ -1304,11 +1303,24 @@ export default function ExplorePage() {
                     transition: "border-color 0.2s ease, box-shadow 0.2s ease",
                     display: "flex",
                     flexDirection: "column",
-                    gap: 4
+                    gap: 2
                   }}
                 >
-                  <p style={{ margin: 0, fontWeight: isSelected ? 700 : 600, fontSize: 14 }}>{bench.name}</p>
-                  <p className="muted" style={{ margin: 0, fontSize: 11 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: isSelected ? 700 : 600,
+                      fontSize: 13,
+                      lineHeight: 1.25,
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden"
+                    }}
+                  >
+                    {bench.name}
+                  </p>
+                  <p className="muted" style={{ margin: 0, fontSize: 10, lineHeight: 1.3 }}>
                     {bench.neighborhood} • {bench.averageRating.toFixed(1)}★ · {bench.reviewCount ?? 0} benchmark{(bench.reviewCount ?? 0) === 1 ? "" : "s"}
                   </p>
                   <button
@@ -1318,8 +1330,8 @@ export default function ExplorePage() {
                       openBenchDetail(bench);
                     }}
                     style={{
-                      marginTop: 6,
-                      fontSize: 12,
+                      marginTop: 2,
+                      fontSize: 11,
                       fontWeight: 600,
                       color: "var(--accent)",
                       textDecoration: "none",

@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { addWishlistItem, getBench, listBenchReviews, listWishlist, removeWishlistItem, submitBenchmark } from "@/src/lib/api";
+import { addWishlistItem, deleteBench, getBench, listBenchReviews, listWishlist, removeWishlistItem, submitBenchmark } from "@/src/lib/api";
 import type { Bench, BenchReview } from "@/src/lib/types";
 import { useAuth } from "@/src/contexts/auth-context";
 import { trackEvent } from "@/src/lib/analytics";
@@ -22,6 +22,7 @@ import { FollowButton } from "@/src/components/follow-button";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
 import { MapLightbox } from "@/src/components/map-lightbox";
 import { PhotoLightbox } from "@/src/components/photo-lightbox";
+import { RatingHand } from "@/src/components/rating-hands";
 import { Toast } from "@/src/components/toast";
 
 type ProximityState =
@@ -60,11 +61,6 @@ const RATING_LABELS: Record<string, string> = {
   "5": "life-changing"
 };
 
-const RATING_EMOJI: Record<string, string> = {
-  "1": "😬", "1.5": "😕", "2": "😐", "2.5": "🙂",
-  "3": "😊", "3.5": "😄", "4": "🤩", "4.5": "🥳", "5": "🪑✨"
-};
-
 function HeartIcon({ filled }: { filled: boolean }) {
   return filled ? (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)" stroke="var(--accent)" strokeWidth="2">
@@ -77,10 +73,21 @@ function HeartIcon({ filled }: { filled: boolean }) {
   );
 }
 
+function TrashIcon() {
+  return (
+    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1={10} y1={11} x2={10} y2={17} />
+      <line x1={14} y1={11} x2={14} y2={17} />
+    </svg>
+  );
+}
+
 export default function BenchDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { profileId } = useAuth();
+  const { profileId, isAdmin } = useAuth();
   const benchID = params.id;
   const [bench, setBench] = useState<Bench | null>(null);
   const [reviews, setReviews] = useState<BenchReview[]>([]);
@@ -89,6 +96,7 @@ export default function BenchDetailPage() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [mapOpen, setMapOpen] = useState(false);
   const [showAllPhotosModal, setShowAllPhotosModal] = useState(false);
@@ -187,6 +195,24 @@ export default function BenchDetailPage() {
       setWishlistLoading(false);
     }
   }, [profileId, benchID, wishlisted]);
+
+  const handleDeleteBench = useCallback(async () => {
+    if (!isAdmin || !bench || deleting) return;
+    const ok = window.confirm(
+      `Delete “${bench.name}”? This permanently removes the bench and its benchmarks.`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    setStatus(null);
+    try {
+      await deleteBench(bench.id);
+      trackEvent({ name: "bench_deleted", benchId: bench.id, userId: profileId ?? undefined });
+      router.replace("/explore");
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "unable to delete bench");
+      setDeleting(false);
+    }
+  }, [isAdmin, bench, deleting, profileId, router]);
 
   const onPhotosSelected = useCallback(async (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -291,7 +317,6 @@ export default function BenchDetailPage() {
 
   const ratingKey = String(rating);
   const ratingLabel = RATING_LABELS[ratingKey] ?? "";
-  const ratingEmoji = RATING_EMOJI[ratingKey] ?? "🪑";
   const fillPct = ((rating - 1) / 4) * 100;
 
   const allPhotos = [
@@ -331,18 +356,40 @@ export default function BenchDetailPage() {
                 {bench.averageRating.toFixed(1)} ★
               </p>
             </div>
-            <button
-              type="button"
-              className={`wishlist-btn${wishlisted ? " saved" : ""}`}
-              onClick={toggleWishlist}
-              disabled={wishlistLoading}
-              style={{ flexShrink: 0, marginTop: 4 }}
-            >
-              <span className="heart-icon" key={wishlisted ? "filled" : "outline"}>
-                <HeartIcon filled={wishlisted} />
-              </span>
-              {wishlisted ? "saved" : "save"}
-            </button>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0, marginTop: 4 }}>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="button-secondary"
+                  onClick={handleDeleteBench}
+                  disabled={deleting}
+                  aria-label="Delete bench"
+                  title="Delete bench"
+                  style={{
+                    height: 34,
+                    width: 34,
+                    padding: 0,
+                    display: "grid",
+                    placeItems: "center",
+                    color: "var(--danger)",
+                    borderColor: "rgba(166,63,50,0.35)"
+                  }}
+                >
+                  <TrashIcon />
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className={`wishlist-btn${wishlisted ? " saved" : ""}`}
+                onClick={toggleWishlist}
+                disabled={wishlistLoading}
+              >
+                <span className="heart-icon" key={wishlisted ? "filled" : "outline"}>
+                  <HeartIcon filled={wishlisted} />
+                </span>
+                {wishlisted ? "saved" : "save"}
+              </button>
+            </div>
           </div>
           <p style={{ marginTop: 8 }}>{bench.description}</p>
           {(bench.lengthFt != null || bench.donorPlaque) && (
@@ -549,8 +596,8 @@ export default function BenchDetailPage() {
             <div className="rating-slider-container" style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}>
                 <span style={{ fontSize: 13, fontWeight: 600 }}>rating</span>
-                <div style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: 28, lineHeight: 1 }}>{ratingEmoji}</span>
+                <div style={{ textAlign: "right", color: "var(--accent)", display: "flex", alignItems: "center" }}>
+                  <RatingHand rating={rating} size={34} />
                 </div>
               </div>
               <div style={{ textAlign: "center", marginBottom: 6 }}>
