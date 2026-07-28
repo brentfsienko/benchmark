@@ -151,12 +151,20 @@ export function buildAuthEmailHtml(emailData: AuthEmailData, _toEmail: string): 
     cta: "Continue"
   };
 
+  const blurb =
+    action === "signup" || action === "invite"
+      ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.55;color:#605847;">
+           Mark the benches you love, leave a rating, and take a seat with the rest of us.
+         </p>`
+      : "";
+
   return emailShell({
     title: content.title,
     bodyHtml: `
-      <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#605847;">
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#605847;">
         ${escapeHtml(content.body)}
       </p>
+      ${blurb}
     `,
     cta: content.cta,
     confirmationUrl
@@ -201,8 +209,18 @@ function emailShell(opts: {
             <td style="padding:22px 24px 8px;background:#efe5d6;border-bottom:1px solid #dacfbf;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                  <td style="width:28px;height:28px;border-radius:8px;background:#2d6a4f;color:#f7f1e8;font-size:14px;font-weight:700;text-align:center;vertical-align:middle;line-height:28px;">b</td>
-                  <td style="padding-left:10px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:18px;font-weight:700;color:#23201b;letter-spacing:-0.02em;">benchmark</td>
+                  <td style="vertical-align:middle;">
+                    <img
+                      src="https://benchmark.rest/app-icon.png"
+                      width="36"
+                      height="36"
+                      alt="Benchmark"
+                      style="display:block;width:36px;height:36px;border-radius:8px;border:0;"
+                    />
+                  </td>
+                  <td style="padding-left:10px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:18px;font-weight:700;color:#23201b;letter-spacing:0.06em;text-transform:lowercase;vertical-align:middle;">
+                    benchmark
+                  </td>
                 </tr>
               </table>
             </td>
