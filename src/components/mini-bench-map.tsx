@@ -76,6 +76,12 @@ export function MiniBenchMap({
 
       mapRef.current = map;
       markerRef.current = marker;
+
+      // Modal / late-layout containers need a size pass after paint.
+      requestAnimationFrame(() => {
+        map.invalidateSize({ pan: false });
+        setTimeout(() => map.invalidateSize({ pan: false }), 120);
+      });
     });
 
     return () => {
@@ -86,5 +92,16 @@ export function MiniBenchMap({
     };
   }, [mounted, latitude, longitude, markerLabel, interactive]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} aria-label="bench location map" />;
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        pointerEvents: interactive ? "auto" : "none"
+      }}
+      aria-label="bench location map"
+    />
+  );
 }

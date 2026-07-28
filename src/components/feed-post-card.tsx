@@ -11,6 +11,8 @@ import {
 } from "@/src/lib/api";
 import type { ActivityItem, ReviewComment } from "@/src/lib/types";
 import { MiniBenchMap } from "@/src/components/mini-bench-map";
+import { MapLightbox } from "@/src/components/map-lightbox";
+import { PhotoLightbox } from "@/src/components/photo-lightbox";
 
 function photoSrc(raw: string): string {
   if (raw.startsWith("data:") || raw.startsWith("http")) return raw;
@@ -91,6 +93,8 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
   const [editBody, setEditBody] = useState(item.body ?? "");
   const [menuOpen, setMenuOpen] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [mapOpen, setMapOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const isOwner = Boolean(viewerId && viewerId === item.userId);
   const authorName = item.author || item.username || "benchmarker";
@@ -111,6 +115,11 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
     }
     return out;
   }, [item.latitude, item.longitude, item.photoBase64Items]);
+
+  const photoSlides = useMemo(
+    () => slides.filter((s): s is { type: "photo"; src: string } => s.type === "photo").map((s) => s.src),
+    [slides]
+  );
 
   const multiSlide = slides.length > 1;
   // Phone-sized square tiles; peek of the next slide when there are multiple.
@@ -338,8 +347,14 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
           className="feed-media-carousel"
         >
           {slides.map((s, i) => (
-            <div
+            <button
               key={i}
+              type="button"
+              aria-label={s.type === "map" ? "Expand map" : "View photo"}
+              onClick={() => {
+                if (s.type === "map") setMapOpen(true);
+                else setLightboxSrc(s.src);
+              }}
               style={{
                 flex: `0 0 ${mediaSize}px`,
                 width: mediaSize,
@@ -349,7 +364,11 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                 isolation: "isolate",
                 scrollSnapAlign: "start",
                 background: "var(--elevated)",
-                position: "relative"
+                position: "relative",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                display: "block"
               }}
             >
               {s.type === "map" && item.latitude != null && item.longitude != null ? (
@@ -362,13 +381,31 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
               ) : null}
               {s.type === "photo" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                <img src={s.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }} />
               ) : null}
-            </div>
+            </button>
           ))}
           {multiSlide ? <div style={{ flex: "0 0 4px" }} aria-hidden /> : null}
         </div>
       ) : null}
+
+      {item.latitude != null && item.longitude != null ? (
+        <MapLightbox
+          open={mapOpen}
+          latitude={item.latitude}
+          longitude={item.longitude}
+          label={item.benchName}
+          onClose={() => setMapOpen(false)}
+        />
+      ) : null}
+
+      <PhotoLightbox
+        photos={photoSlides}
+        src={lightboxSrc}
+        onClose={() => setLightboxSrc(null)}
+        onChange={setLightboxSrc}
+        alt={`Photo of ${item.benchName}`}
+      />
 
       <div style={{ padding: "10px 14px 6px", display: "flex", justifyContent: "space-between", gap: 12 }}>
         <p className="muted" style={{ margin: 0, fontSize: 12 }}>
