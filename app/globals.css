@@ -107,6 +107,10 @@ main {
   color: var(--text-secondary);
 }
 
+.feed-media-carousel::-webkit-scrollbar {
+  display: none;
+}
+
 .button-primary {
   border: 1px solid transparent;
   border-radius: 999px;
