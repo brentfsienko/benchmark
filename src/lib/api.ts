@@ -10,6 +10,7 @@ import type {
   FollowRelationshipState,
   FollowRequests,
   LeaderboardEntry,
+  ReviewComment,
   UserProfile,
   UserSearchResult,
   UserSummary
@@ -202,6 +203,44 @@ export async function submitBenchmark(
       latitude: payload.latitude,
       longitude: payload.longitude
     })
+  });
+}
+
+export function updateBenchmark(
+  reviewId: string,
+  payload: { rating?: number; body?: string; photoBase64Items?: string[] }
+): Promise<BenchReview> {
+  return request<BenchReview>(`/reviews/${reviewId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteBenchmark(reviewId: string): Promise<{ ok: boolean }> {
+  return request<{ ok: boolean }>(`/reviews/${reviewId}`, { method: "DELETE" });
+}
+
+export function likeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount: number }> {
+  return request<{ liked: boolean; likeCount: number }>(`/reviews/${reviewId}/like`, {
+    method: "POST",
+    body: JSON.stringify({})
+  });
+}
+
+export function unlikeBenchmark(reviewId: string): Promise<{ liked: boolean; likeCount: number }> {
+  return request<{ liked: boolean; likeCount: number }>(`/reviews/${reviewId}/like`, {
+    method: "DELETE"
+  });
+}
+
+export function listReviewComments(reviewId: string): Promise<ReviewComment[]> {
+  return request<ReviewComment[]>(`/reviews/${reviewId}/comments`, { cache: "no-store" });
+}
+
+export function addReviewComment(reviewId: string, body: string): Promise<ReviewComment> {
+  return request<ReviewComment>(`/reviews/${reviewId}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body })
   });
 }
 

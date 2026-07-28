@@ -7,21 +7,10 @@ import { listActivity } from "@/src/lib/api";
 import type { ActivityItem } from "@/src/lib/types";
 import { SectionHeader } from "@/src/components/section-header";
 import { FriendNavButton } from "@/src/components/friend-nav-button";
+import { FeedPostCard } from "@/src/components/feed-post-card";
 import { trackEvent } from "@/src/lib/analytics";
 
-const PAGE_SIZE = 15;
-
-function StarRating({ rating }: { rating: number }) {
-  const full = Math.floor(rating);
-  const half = rating - full >= 0.25;
-  const stars: string[] = [];
-  for (let i = 0; i < 5; i++) {
-    if (i < full) stars.push("★");
-    else if (i === full && half) stars.push("½");
-    else stars.push("☆");
-  }
-  return <span style={{ color: "var(--accent)", letterSpacing: 1 }}>{stars.join("")}</span>;
-}
+const PAGE_SIZE = 12;
 
 export default function HomePage() {
   const { profileId, user, loading: authLoading } = useAuth();
@@ -91,7 +80,7 @@ export default function HomePage() {
 
   return (
     <section className="screen">
-      <SectionHeader title="home" subtitle="your recent benchmarks" action={<FriendNavButton />} />
+      <SectionHeader title="home" subtitle="recent benches from you and friends" action={<FriendNavButton />} />
       {showAuthGate && (
         <div className="surface-card" style={{ padding: 20 }}>
           <p className="muted" style={{ margin: "0 0 12px" }}>sign in to view your feed</p>
@@ -114,37 +103,21 @@ export default function HomePage() {
           </Link>
         </div>
       ) : null}
+
       <div style={{ display: "grid", gap: "var(--space-3)" }}>
         {user &&
           items.map((item) => (
-            <Link key={item.id} href={`/bench/${item.benchId}`} style={{ display: "block" }}>
-              <article
-                className="surface-card"
-                style={{ padding: "var(--space-4)", transition: "transform 0.15s", cursor: "pointer" }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: 8
-                  }}
-                >
-                  <p style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>{item.benchName}</p>
-                  {item.rating !== undefined && <StarRating rating={item.rating} />}
-                </div>
-                <p className="muted" style={{ margin: "6px 0 0", fontSize: 12 }}>
-                  benchmarked {new Date(item.createdAt).toLocaleDateString()}
-                </p>
-                {item.author && (
-                  <p className="muted" style={{ margin: "4px 0 0", fontSize: 11 }}>
-                    by {item.userId === profileId ? "you" : item.author}
-                  </p>
-                )}
-              </article>
-            </Link>
+            <FeedPostCard
+              key={item.id}
+              item={item}
+              viewerId={profileId}
+              onUpdated={(next) => {
+                setItems((prev) => prev.map((row) => (row.id === next.id ? next : row)));
+              }}
+            />
           ))}
       </div>
+
       {user && !showLoading && hasMore ? (
         <button
           type="button"
