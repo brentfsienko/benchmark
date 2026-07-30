@@ -16,9 +16,13 @@ import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { Toast } from "@/src/components/toast";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import {
+  EXPLORE_RETURN_KEY,
   NEARBY_ZOOM,
   readSavedMapView,
+  stashExploreReturnView,
+  takeExploreReturnView,
   viewportAround,
+  writeSavedMapView,
   type SavedMapView
 } from "@/src/lib/map-view";
 import { trackEvent } from "@/src/lib/analytics";
@@ -271,11 +275,17 @@ export default function ExplorePage() {
   }, []);
 
   const pickSelection = useCallback((prev: string | null, mapPins: BenchPin[], bounds: ViewportBounds | null) => {
-    if (prev && mapPins.some((b) => b.id === prev)) return prev;
+    // Once the user has a selection, keep it while panning — don't chase the center.
+    if (prev) return prev;
     if (!bounds) return mapPins[0]?.id ?? null;
     const focus = centerFocusBounds(bounds);
     const centered = mapPins.filter((b) => pinInBounds(b, focus));
     return centered[0]?.id ?? mapPins[0]?.id ?? null;
+  }, []);
+
+  const stashReturnViewBeforeFly = useCallback(() => {
+    const view = readSavedMapView();
+    if (view) stashExploreReturnView(view);
   }, []);
 
   const refresh = useCallback(async (bounds: ViewportBounds) => {
@@ -345,8 +355,18 @@ export default function ExplorePage() {
     refresh(bounds).catch(() => {});
   }, [applyFilters, pickSelection, refresh]);
 
-  // Prefetch pins before Leaflet finishes: saved camera, else GPS nearby.
+  // Prefetch pins before Leaflet finishes: return-from-bench view, saved camera, else GPS.
   useEffect(() => {
+    const returning = takeExploreReturnView();
+    if (returning) {
+      writeSavedMapView(returning.lat, returning.lng, returning.zoom);
+      setBootView(returning);
+      const bounds = viewportAround(returning.lat, returning.lng, returning.zoom) as ViewportBounds;
+      currentBoundsRef.current = bounds;
+      setViewportBounds(bounds);
+      refresh(bounds).catch(() => {});
+      return;
+    }
     const saved = readSavedMapView();
     if (saved) {
       setBootView(saved);
@@ -400,7 +420,10 @@ export default function ExplorePage() {
     const centered = benches.filter((b) => pinInBounds(b, focus));
     if (!selectedBenchID) return centered;
     if (centered.some((b) => b.id === selectedBenchID)) return centered;
-    const selected = benches.find((b) => b.id === selectedBenchID);
+    // Keep the locked selection in the carousel even when it's outside the focus frame.
+    const selected =
+      benches.find((b) => b.id === selectedBenchID) ??
+      pinCacheRef.current.get(selectedBenchID);
     return selected ? [selected, ...centered] : centered;
   }, [benches, viewportBounds, selectedBenchID]);
 
@@ -533,6 +556,11 @@ export default function ExplorePage() {
   }, []);
 
   const openBenchDetail = useCallback((bench: BenchPin) => {
+    // Prefer an earlier stash (pre-fly); otherwise remember the current camera.
+    if (!sessionStorage.getItem(EXPLORE_RETURN_KEY)) {
+      const view = readSavedMapView();
+      if (view) stashExploreReturnView(view);
+    }
     setSelectedBenchID(bench.id);
     trackEvent({ name: "bench_opened_from_explore", benchId: bench.id });
     router.push(`/bench/${bench.id}`);
@@ -545,12 +573,13 @@ export default function ExplorePage() {
       setSearchOpen(false);
       setSearchExpanded(false);
       setSearchResults([]);
+      stashReturnViewBeforeFly();
       suppressPinFetchRef.current = true;
       flyToRef.current(pin.latitude, pin.longitude);
       openBenchDetail(pin);
       trackEvent({ name: "bench_search_selected", benchId: pin.id });
     },
-    [openBenchDetail]
+    [openBenchDetail, stashReturnViewBeforeFly]
   );
 
   const showToast = useCallback((message: string) => {
@@ -571,10 +600,12 @@ export default function ExplorePage() {
   }, [carouselBenches.length, loading]);
 
   useEffect(() => {
-    if (!selectedBenchID || carouselBenches.length === 0) return;
+    if (!selectedBenchID) return;
     scrollCarouselToSelected("smooth");
     void prefetchBench(selectedBenchID);
-  }, [selectedBenchID, carouselBenches, scrollCarouselToSelected, prefetchBench]);
+    // Only re-center the carousel when the selection changes — not when new
+    // benches enter the frame (avoids map/carousel thrash while panning).
+  }, [selectedBenchID, scrollCarouselToSelected, prefetchBench]);
 
   const handleCarouselScroll = useCallback(() => {
     if (ignoreCarouselScrollRef.current) return;
@@ -597,33 +628,36 @@ export default function ExplorePage() {
       if (bestId && bestId !== selectedBenchID) {
         const bench = carouselBenches.find((b) => b.id === bestId);
         if (bench) {
+          stashReturnViewBeforeFly();
           setSelectedBenchID(bench.id);
           suppressPinFetchRef.current = true;
           flyToRef.current(bench.latitude, bench.longitude);
         }
       }
     }, 80);
-  }, [carouselBenches, selectedBenchID]);
+  }, [carouselBenches, selectedBenchID, stashReturnViewBeforeFly]);
 
   const handleSelectFromMap = useCallback((bench: BenchPin) => {
     if (bench.id === selectedBenchID) {
       openBenchDetail(bench);
       return;
     }
+    stashReturnViewBeforeFly();
     setSelectedBenchID(bench.id);
     suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
-  }, [selectedBenchID, openBenchDetail]);
+  }, [selectedBenchID, openBenchDetail, stashReturnViewBeforeFly]);
 
   const handleSelectFromCard = useCallback((bench: BenchPin) => {
     if (bench.id === selectedBenchID) {
       openBenchDetail(bench);
       return;
     }
+    stashReturnViewBeforeFly();
     setSelectedBenchID(bench.id);
     suppressPinFetchRef.current = true;
     flyToRef.current(bench.latitude, bench.longitude);
-  }, [selectedBenchID, openBenchDetail]);
+  }, [selectedBenchID, openBenchDetail, stashReturnViewBeforeFly]);
 
   const handleMapReady = useCallback((flyTo: (lat: number, lng: number) => void) => {
     flyToRef.current = flyTo;
