@@ -1,4 +1,6 @@
-/** Handmade silhouette hands for bench ratings — no emoji. */
+import type { ReactNode } from "react";
+
+/** Silhouette hands for bench ratings — clear fingers + palm at small sizes. */
 
 type HandProps = {
   size?: number;
@@ -6,109 +8,117 @@ type HandProps = {
   title?: string;
 };
 
-const ink = "currentColor";
+function HandSvg({
+  size = 28,
+  width,
+  className,
+  title,
+  viewBox = "0 0 32 32",
+  children,
+}: HandProps & { viewBox?: string; children: ReactNode; width?: number }) {
+  return (
+    <svg
+      width={width ?? size}
+      height={size}
+      viewBox={viewBox}
+      className={className}
+      aria-hidden={title ? undefined : true}
+      role={title ? "img" : undefined}
+      fill="currentColor"
+    >
+      {title ? <title>{title}</title> : null}
+      {children}
+    </svg>
+  );
+}
 
 /** Thumbs down — bad sit */
 export function HandThumbsDown({ size = 28, className, title }: HandProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      className={className}
-      aria-hidden={title ? undefined : true}
-      role={title ? "img" : undefined}
-    >
-      {title ? <title>{title}</title> : null}
-      <path
-        fill={ink}
-        d="M12 4h8c1.1 0 2 .9 2 2v8h2.5c1.4 0 2.5 1.1 2.5 2.5V19c0 1.1-.7 2.1-1.7 2.4L20 23.5V28h-2.5c-1.1 0-2-.7-2.3-1.7L14 22H10V6c0-1.1.9-2 2-2zm-4 8H6c-1.1 0-2 .9-2 2v6c0 1.1.9 2 2 2h2V12z"
-      />
-    </svg>
+    <HandSvg size={size} className={className} title={title}>
+      {/* Fist / knuckle block */}
+      <rect x="10" y="4" width="12" height="14" rx="3.5" />
+      {/* Downward thumb */}
+      <rect x="13.5" y="16" width="5" height="11" rx="2.5" />
+      {/* Palm heel stub on the side */}
+      <rect x="6" y="8" width="5" height="10" rx="2.5" />
+    </HandSvg>
   );
 }
 
 /** Flat open palm — middle / meh */
 export function HandFlat({ size = 28, className, title }: HandProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      className={className}
-      aria-hidden={title ? undefined : true}
-      role={title ? "img" : undefined}
-    >
-      {title ? <title>{title}</title> : null}
-      <path
-        fill={ink}
-        d="M10 4c.6 0 1 .4 1 1v9h1V3c0-.6.4-1 1-1s1 .4 1 1v11h1V2c0-.6.4-1 1-1s1 .4 1 1v12h1V4c0-.6.4-1 1-1s1 .4 1 1v12.5l.8-.5c.8-.5 1.9-.4 2.5.4l.1.1c.5.7.4 1.6-.2 2.2L18.5 26c-.6.6-1.4.9-2.2.9H11c-2.2 0-4-1.8-4-4V12c0-.6.4-1 1-1s1 .4 1 1v6h1V5c0-.6.4-1 1-1z"
-      />
-    </svg>
+    <HandSvg size={size} className={className} title={title}>
+      {/* Four fingers upright */}
+      <rect x="8" y="2" width="3.2" height="12" rx="1.6" />
+      <rect x="12.1" y="1" width="3.2" height="13" rx="1.6" />
+      <rect x="16.2" y="1" width="3.2" height="13" rx="1.6" />
+      <rect x="20.3" y="2.5" width="3.2" height="11.5" rx="1.6" />
+      {/* Palm */}
+      <rect x="8" y="12" width="15.5" height="12" rx="4" />
+      {/* Thumb out to the left */}
+      <rect x="3.5" y="13" width="6" height="3.4" rx="1.7" transform="rotate(-28 6.5 14.7)" />
+    </HandSvg>
   );
 }
 
 /** Italian / pinched fingers — pretty good */
 export function HandItalian({ size = 28, className, title }: HandProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      className={className}
-      aria-hidden={title ? undefined : true}
-      role={title ? "img" : undefined}
-    >
-      {title ? <title>{title}</title> : null}
-      <path
-        fill={ink}
-        d="M16.2 3.2c.5-.4 1.2-.3 1.6.2l2.4 3.2c.2.3.3.6.3 1V12h.8c.9 0 1.7.5 2.1 1.3l1.8 3.6c.3.6.2 1.4-.3 1.9l-5.2 5.5c-.4.4-.9.6-1.4.6H12c-1.7 0-3-1.3-3-3v-6.2c0-.4.1-.8.4-1.1l5.5-6.4c.1-.2.2-.3.3-.5V4.5c0-.5.3-.9.7-1.1.1 0 .2-.1.3-.2zM9 16H7.5C6.1 16 5 17.1 5 18.5V22c0 1.4 1.1 2.5 2.5 2.5H9V16z"
-      />
-    </svg>
+    <HandSvg size={size} className={className} title={title}>
+      {/* Pinched tip cluster */}
+      <ellipse cx="16" cy="7" rx="4.5" ry="5.5" />
+      {/* Wrist / lower hand */}
+      <path d="M11.5 10.5c-1.2 1.8-2 4-2 6.5 0 3.6 2.7 6.5 6.5 6.5s6.5-2.9 6.5-6.5c0-2.5-.8-4.7-2-6.5-.8 1.4-2.5 2.3-4.5 2.3s-3.7-.9-4.5-2.3z" />
+      {/* Thumb flare */}
+      <rect x="7" y="14" width="5.5" height="3.2" rx="1.6" transform="rotate(-35 9.75 15.6)" />
+    </HandSvg>
   );
 }
 
 /** One raised hand — great */
 export function HandRaised({ size = 28, className, title }: HandProps) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 32 32"
-      className={className}
-      aria-hidden={title ? undefined : true}
-      role={title ? "img" : undefined}
-    >
-      {title ? <title>{title}</title> : null}
-      <path
-        fill={ink}
-        d="M15 2c.6 0 1 .4 1 1v8h1.2V3.5c0-.6.4-1 1-1s1 .4 1 1V11h1.2V5c0-.6.4-1 1-1s1 .4 1 1v8.2l1.4-.7c.7-.3 1.5-.1 1.9.5l.8 1.2c.4.6.3 1.4-.2 1.9L21 21.5V28h-2.2c-1 0-1.9-.6-2.2-1.5L15.5 23H12v-1.5c0-.8.3-1.6.9-2.2L16 16V3c0-.6.4-1 1-1h-2zm-5 12H8c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h2v-11z"
-      />
-    </svg>
+    <HandSvg size={size} className={className} title={title}>
+      {/* Fingers — clear separate digits */}
+      <rect x="8" y="2" width="3.4" height="13" rx="1.7" />
+      <rect x="12.2" y="1" width="3.4" height="14" rx="1.7" />
+      <rect x="16.4" y="1" width="3.4" height="14" rx="1.7" />
+      <rect x="20.6" y="2.5" width="3.4" height="12.5" rx="1.7" />
+      {/* Palm */}
+      <rect x="8" y="13" width="16" height="13" rx="4.5" />
+      {/* Thumb */}
+      <rect x="3.2" y="14.5" width="7" height="3.6" rx="1.8" transform="rotate(-32 6.7 16.3)" />
+    </HandSvg>
   );
 }
 
 /** Two raised hands — life-changing */
 export function HandRaisedPair({ size = 28, className, title }: HandProps) {
   return (
-    <svg
-      width={Math.round(size * 1.25)}
-      height={size}
-      viewBox="0 0 40 32"
+    <HandSvg
+      size={size}
+      width={Math.round(size * 1.4)}
       className={className}
-      aria-hidden={title ? undefined : true}
-      role={title ? "img" : undefined}
+      title={title}
+      viewBox="0 0 44 32"
     >
-      {title ? <title>{title}</title> : null}
-      <path
-        fill={ink}
-        d="M8 3c.5 0 .9.4.9.9v7h1V4c0-.5.4-.9.9-.9s.9.4.9.9v7h1V5.2c0-.5.4-.9.9-.9s.9.4.9.9V13l1.1-.5c.5-.3 1.2-.1 1.5.4l.6 1c.3.5.2 1.1-.2 1.5L14.8 20v5.2h-1.7c-.8 0-1.5-.5-1.7-1.2L10.3 21H7.8v-1.2c0-.6.2-1.2.7-1.6L11 15V3.9c0-.5.4-.9.9-.9H8zM4.2 13H3c-.8 0-1.5.7-1.5 1.5v5.5c0 .8.7 1.5 1.5 1.5h1.2V13z"
-      />
-      <path
-        fill={ink}
-        d="M28 3c.5 0 .9.4.9.9v7h1V4c0-.5.4-.9.9-.9s.9.4.9.9v7h1V5.2c0-.5.4-.9.9-.9s.9.4.9.9V13l1.1-.5c.5-.3 1.2-.1 1.5.4l.6 1c.3.5.2 1.1-.2 1.5L34.8 20v5.2h-1.7c-.8 0-1.5-.5-1.7-1.2L30.3 21H27.8v-1.2c0-.6.2-1.2.7-1.6L31 15V3.9c0-.5.4-.9.9-.9H28zM36.8 13H38c.8 0 1.5.7 1.5 1.5v5.5c0 .8-.7 1.5-1.5 1.5h-1.2V13z"
-      />
-    </svg>
+      {/* Left hand */}
+      <rect x="5" y="2" width="3" height="12" rx="1.5" />
+      <rect x="8.6" y="1" width="3" height="13" rx="1.5" />
+      <rect x="12.2" y="1" width="3" height="13" rx="1.5" />
+      <rect x="15.8" y="2.5" width="3" height="11.5" rx="1.5" />
+      <rect x="5" y="12" width="13.8" height="12" rx="4" />
+      <rect x="1" y="13.5" width="6" height="3.2" rx="1.6" transform="rotate(-32 4 15.1)" />
+      {/* Right hand */}
+      <rect x="25" y="2" width="3" height="12" rx="1.5" />
+      <rect x="28.6" y="1" width="3" height="13" rx="1.5" />
+      <rect x="32.2" y="1" width="3" height="13" rx="1.5" />
+      <rect x="35.8" y="2.5" width="3" height="11.5" rx="1.5" />
+      <rect x="25" y="12" width="13.8" height="12" rx="4" />
+      <rect x="37.5" y="13.5" width="6" height="3.2" rx="1.6" transform="rotate(32 40.5 15.1)" />
+    </HandSvg>
   );
 }
 

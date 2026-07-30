@@ -1262,16 +1262,18 @@ export default function ExplorePage() {
         </div>
       )}
 
-      {/* Floating carousel — fade runs to the nav; cards keep their lift via padding. */}
+      {/* Floating carousel — fade runs under the nav so there's no hairline gap;
+          card lift is preserved via padding-bottom. */}
       <div
         style={{
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: "calc(var(--nav-height) + var(--safe-bottom))",
+          bottom: 0,
           zIndex: 2,
-          padding: "8px 0 10px",
-          background: "linear-gradient(to top, rgba(245,239,228,0.98) 0%, rgba(245,239,228,0.95) 40%, rgba(245,239,228,0.9) 60%, transparent 100%)",
+          padding: "8px 0 calc(var(--nav-height) + var(--safe-bottom) + 10px)",
+          background:
+            "linear-gradient(to top, var(--page) 0%, var(--page) calc(var(--nav-height) + var(--safe-bottom) + 10px), rgba(245,239,228,0.95) 55%, transparent 100%)",
         }}
       >
         {loading ? (
