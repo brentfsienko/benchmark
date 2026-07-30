@@ -116,6 +116,7 @@ export function MapLightbox({ open, latitude, longitude, label, onClose }: MapLi
           longitude={longitude}
           markerLabel={label}
           interactive
+          showUserLocation
         />
         {label ? (
           <div

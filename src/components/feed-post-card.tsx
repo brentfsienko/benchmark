@@ -377,6 +377,7 @@ export function FeedPostCard({ item, viewerId, onUpdated }: FeedPostCardProps) {
                   longitude={item.longitude}
                   markerLabel={item.benchName}
                   interactive={false}
+                  showUserLocation
                 />
               ) : null}
               {s.type === "photo" ? (

@@ -11,6 +11,8 @@ export type ViewportBoundsLike = {
 };
 
 export const LAST_MAP_KEY = "benchmark:lastMapView";
+/** Camera to restore after leaving a bench detail opened from explore. */
+export const EXPLORE_RETURN_KEY = "benchmark:exploreReturnView";
 export const NEARBY_ZOOM = 15;
 /** Neutral world overview — used only when there is no saved view and GPS fails. */
 export const WORLD_MAP_CENTER = { lat: 20, lng: 0 } as const;
@@ -41,6 +43,37 @@ export function writeSavedMapView(lat: number, lng: number, zoom: number) {
     window.localStorage.setItem(LAST_MAP_KEY, JSON.stringify({ lat, lng, zoom }));
   } catch {
     // ignore quota / private mode
+  }
+}
+
+/** Remember where explore was before opening a bench detail (session-scoped). */
+export function stashExploreReturnView(view: SavedMapView) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(EXPLORE_RETURN_KEY, JSON.stringify(view));
+  } catch {
+    // ignore
+  }
+}
+
+/** Consume and clear a stashed explore return view, if any. */
+export function takeExploreReturnView(): SavedMapView | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(EXPLORE_RETURN_KEY);
+    if (!raw) return null;
+    window.sessionStorage.removeItem(EXPLORE_RETURN_KEY);
+    const parsed = JSON.parse(raw) as SavedMapView;
+    if (
+      !Number.isFinite(parsed.lat) ||
+      !Number.isFinite(parsed.lng) ||
+      !Number.isFinite(parsed.zoom)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
   }
 }
 
