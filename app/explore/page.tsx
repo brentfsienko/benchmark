@@ -1228,16 +1228,16 @@ export default function ExplorePage() {
         </div>
       )}
 
-      {/* Floating carousel */}
+      {/* Floating carousel — fade runs to the nav; cards keep their lift via padding. */}
       <div
         style={{
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: "calc(var(--nav-height) + var(--safe-bottom) + 10px)",
+          bottom: "calc(var(--nav-height) + var(--safe-bottom))",
           zIndex: 2,
-          padding: "8px 0 0",
-          background: "linear-gradient(to top, rgba(245,239,228,0.98) 0%, rgba(245,239,228,0.9) 55%, transparent 100%)",
+          padding: "8px 0 10px",
+          background: "linear-gradient(to top, rgba(245,239,228,0.98) 0%, rgba(245,239,228,0.95) 40%, rgba(245,239,228,0.9) 60%, transparent 100%)",
         }}
       >
         {loading ? (
