@@ -14,6 +14,7 @@ import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, sea
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { Toast } from "@/src/components/toast";
+import { RequestBenchesCta } from "@/src/components/request-benches-cta";
 import type { ViewportBounds } from "@/src/components/explore-map";
 import {
   EXPLORE_RETURN_KEY,
@@ -224,6 +225,7 @@ export default function ExplorePage() {
   const addFormDragStartVh = useRef(ADD_FORM_PEEK_VH);
   const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
   const [bootView, setBootView] = useState<SavedMapView | null>(null);
+  const [coverageRequestDismissed, setCoverageRequestDismissed] = useState(false);
   const pinFetchGenRef = useRef(0);
   const pinAbortRef = useRef<AbortController | null>(null);
   const fetchedRegionRef = useRef<FetchedPinRegion | null>(null);
@@ -522,6 +524,28 @@ export default function ExplorePage() {
       (filters.tags && filters.tags.length > 0)
   );
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
+
+  const mapCenter = useMemo(() => {
+    if (viewportBounds) {
+      return {
+        lat: (viewportBounds.sw_lat + viewportBounds.ne_lat) / 2,
+        lng: (viewportBounds.sw_lng + viewportBounds.ne_lng) / 2
+      };
+    }
+    if (bootView) return { lat: bootView.lat, lng: bootView.lng };
+    return null;
+  }, [viewportBounds, bootView]);
+
+  const showCoverageRequestCta =
+    !loading &&
+    !error &&
+    !addMode &&
+    !moveMode &&
+    !hasFilters &&
+    !coverageRequestDismissed &&
+    benches.length === 0 &&
+    mapCenter != null &&
+    (viewportBounds?.zoom ?? bootView?.zoom ?? 0) >= 12;
 
   // detailVersion bumps when prefetch finishes so carousel thumbs stay fresh.
   void detailVersion;
@@ -1203,6 +1227,17 @@ export default function ExplorePage() {
         )}
       </div>
 
+      {/* Empty-area CTA — request benches via email */}
+      {showCoverageRequestCta && mapCenter ? (
+        <RequestBenchesCta
+          visible
+          latitude={mapCenter.lat}
+          longitude={mapCenter.lng}
+          defaultEmail={user?.email ?? ""}
+          onDismiss={() => setCoverageRequestDismissed(true)}
+        />
+      ) : null}
+
       {/* Add mode hint */}
       {(addMode || moveMode) && (
         <div
@@ -1292,7 +1327,11 @@ export default function ExplorePage() {
           </div>
         ) : carouselBenches.length === 0 ? (
           <p className="muted" style={{ margin: "0 16px 8px", fontSize: 13 }}>
-            {benches.length > 0 ? "pan to center a bench" : "no benches nearby"}
+            {hasFilters
+              ? "no benches match these filters"
+              : benches.length > 0
+                ? "pan to center a bench"
+                : "no benches nearby"}
           </p>
         ) : (
           <div

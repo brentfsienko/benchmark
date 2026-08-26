@@ -397,6 +397,19 @@ export function createContentReport(payload: {
   });
 }
 
+export function requestBenchCoverage(payload: {
+  locationLabel: string;
+  contactEmail: string;
+  message?: string;
+  latitude: number;
+  longitude: number;
+}): Promise<{ id: string; sent: boolean }> {
+  return request<{ id: string; sent: boolean }>("/bench-coverage-requests", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getFeatureFlag(flagKey: string): Promise<{ flagKey: string; isEnabled: boolean }> {
   return request<{ flagKey: string; isEnabled: boolean }>(`/admin/feature-flags/${flagKey}`);
 }

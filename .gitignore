@@ -30,3 +30,4 @@ dist/
 scripts/bench-importer/output/
 scripts/bench-importer/data/
 scripts/bench-importer/cache/
+.vercel
