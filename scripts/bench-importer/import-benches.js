@@ -69,6 +69,7 @@ async function main() {
 
     benches.push({
       externalId: String(row["OBJECTID"]),
+      idPrefix: "bench-sea",
       globalId: row["GLOBALID"] || null,
       sourceSystem: "Seattle Parks & Recreation (DPR) GIS — Park Bench",
       name: deriveName(row),

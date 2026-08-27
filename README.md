@@ -84,3 +84,40 @@ Production is Vercel, wired to GitHub. Merging a PR to `main` deploys. Env vars 
 6. Wait for Vercel preview + CI. Don’t merge your own map/tile or env-sensitive changes until the preview map actually loads.
 
 Questions about schema or importers: `scripts/bench-importer/README.md` and `supabase/migrations/`.
+
+## Adding benches
+
+Bench records come from city GIS exports and OSM data. The import pipeline has two stages: a city-specific **parse** script that converts raw data into a common JSON format, followed by a shared **upsert** script that pushes records to Supabase.
+
+### Seattle
+
+Source: City of Seattle / King County GIS CSV (included in `scripts/bench-importer/data/`).
+
+```bash
+npm run import:benches:parse
+npm run import:benches -- --file=./scripts/bench-importer/output/benches-seattle.json --limit=50
+npm run import:benches -- --file=./scripts/bench-importer/output/benches-seattle.json
+```
+
+### San Francisco
+
+Source: OpenStreetMap export (3,367 benches, all geometry types). No API key needed — neighborhood names are derived from a local polygon file.
+
+```bash
+npm run import:benches:sf:parse
+# Smoke test first:
+npm run import:benches:sf -- --limit=50
+# Full import:
+npm run import:benches:sf
+```
+
+Bench names are assigned in priority order: OSM name → inscription text → SF neighborhood → `SF Bench #<osmId>`.
+
+### Adding a new city
+
+1. Write a parse script in `scripts/bench-importer/import-<city>.js` that outputs records matching the shape in `output/benches-seattle.json`, with two additional required fields:
+   - `idPrefix` — e.g. `"bench-nyc"` (must be unique per city to avoid ID collisions)
+   - `sourceSystem` — e.g. `"OpenStreetMap — New York City"`
+2. Add tags like `["nyc-osm"]` and set `isPark: false` or `true` as appropriate.
+3. Wire up npm scripts: `import:benches:<city>:parse` and `import:benches:<city>`.
+4. Run the parse script, smoke-test with `--limit=50`, then run the full upsert.
