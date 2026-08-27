@@ -217,7 +217,7 @@ export function ExploreMap({
         if (initial) appliedBootRef.current = true;
 
         L.tileLayer(
-          `https://api.maptiler.com/maps/dataviz-v4-light/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}`,
+          `https://api.maptiler.com/maps/dataviz-v4/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}`,
           {
             attribution:
               '© <a href="https://www.maptiler.com/copyright/">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
