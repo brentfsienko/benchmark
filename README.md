@@ -1,6 +1,6 @@
 # Benchmark
 
-Mobile-first PWA for finding park benches, rating them, and sharing sits with friends. Live at [benchmark.rest](https://benchmark.rest).
+App for finding park benches, rating them, and sharing sits with friends. Live at [benchmark.rest](https://benchmark.rest).
 
 ## Overview
 
