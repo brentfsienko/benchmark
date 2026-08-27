@@ -216,9 +216,8 @@ export function ExploreMap({
         }
         if (initial) appliedBootRef.current = true;
 
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-          attribution: "© OSM © CARTO",
-          subdomains: "abcd",
+        L.tileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png", {
+          attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
           maxZoom: 20
         }).addTo(map);
 
