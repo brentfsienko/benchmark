@@ -216,10 +216,14 @@ export function ExploreMap({
         }
         if (initial) appliedBootRef.current = true;
 
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19
-        }).addTo(map);
+        L.tileLayer(
+          `https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}`,
+          {
+            attribution: '© <a href="https://www.maptiler.com/copyright/">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 20,
+            tileSize: 256,
+          }
+        ).addTo(map);
 
         L.control.zoom({ position: "bottomright" }).addTo(map);
 

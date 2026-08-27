@@ -73,10 +73,14 @@ export function MiniBenchMap({
         L.default.control.zoom({ position: "bottomright" }).addTo(map);
       }
 
-      L.default.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        maxZoom: 19
-      }).addTo(map);
+      L.default.tileLayer(
+        `https://api.maptiler.com/maps/positron/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}`,
+        {
+          attribution: '© <a href="https://www.maptiler.com/copyright/">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+          maxZoom: 20,
+          tileSize: 256,
+        }
+      ).addTo(map);
 
       const icon = L.default.divIcon({
         className: "bench-pin",
