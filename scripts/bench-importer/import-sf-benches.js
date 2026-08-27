@@ -109,11 +109,44 @@ function buildNeighborhoodLookup(nbhdFeatures) {
 
 const MAX_INSCRIPTION_LEN = 60;
 
+// Map 16-point compass abbreviations → 8-point
+const CARDINAL_16_TO_8 = {
+  n: "N", nne: "N", ne: "NE", ene: "E",
+  e: "E", ese: "E", se: "SE", sse: "S",
+  s: "S", ssw: "S", sw: "SW", wsw: "W",
+  w: "W", wnw: "W", nw: "NW", nnw: "N",
+  north: "N", east: "E", south: "S", west: "W",
+};
+
+/**
+ * Parse an OSM `direction` value to a short 8-point cardinal string, or null.
+ * Handles numeric degrees ("171"), cardinal text ("NNE", "north"), and skips
+ * ambiguous or multi-value strings ("0-360", "NE;SE").
+ */
+function parseDirection(raw) {
+  if (!raw) return null;
+  const s = String(raw).trim();
+
+  // Skip obviously ambiguous values
+  if (s.includes(";") || s.includes("-")) return null;
+
+  // Try text lookup first (case-insensitive)
+  const textMatch = CARDINAL_16_TO_8[s.toLowerCase()];
+  if (textMatch) return textMatch;
+
+  // Try numeric degrees
+  const deg = parseFloat(s);
+  if (!Number.isFinite(deg)) return null;
+  const cardinals = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const idx = Math.round(((deg % 360) + 360) % 360 / 45) % 8;
+  return cardinals[idx];
+}
+
 function deriveName(props, parkName, neighborhood, osmId) {
   // 1. OSM name field
   if (props.name && props.name.trim()) return props.name.trim();
 
-  // 2. Inscription — bench has meaningful commemorative text
+  // 2. Inscription — bench has meaningful commemorative text (no direction suffix)
   if (props.inscription && props.inscription.trim()) {
     const raw = props.inscription.trim();
     return raw.length > MAX_INSCRIPTION_LEN
@@ -121,11 +154,14 @@ function deriveName(props, parkName, neighborhood, osmId) {
       : raw;
   }
 
+  const direction = parseDirection(props.direction);
+  const dirSuffix = direction ? ` · ${direction}` : "";
+
   // 3. Park name (most specific location context)
-  if (parkName) return `${parkName} bench`;
+  if (parkName) return `${parkName} bench${dirSuffix}`;
 
   // 4. Neighborhood
-  if (neighborhood) return `${neighborhood} bench`;
+  if (neighborhood) return `${neighborhood} bench${dirSuffix}`;
 
   // 5. Fallback
   return `SF Bench #${osmId}`;
