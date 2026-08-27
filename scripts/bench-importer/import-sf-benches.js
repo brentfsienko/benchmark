@@ -3,8 +3,16 @@
  * Parse Benches-San_Francisco.geojson (OpenStreetMap export) into the shared
  * bench import format consumed by import-benches-to-db.js.
  *
- * No external API calls — neighborhood names are derived from a local
- * sf-neighborhoods.geojson polygon file (37 SF neighborhoods).
+ * No external API calls — names are derived from two local reference files:
+ *   ref/sf-parks.json       — 503 named SF park polygons (OSM)
+ *   ref/sf-neighborhoods.geojson — 37 SF neighborhood polygons
+ *
+ * Naming priority:
+ *   1. OSM name field
+ *   2. Inscription text (truncated)
+ *   3. Park name  (point-in-polygon against sf-parks.json)
+ *   4. Neighborhood name (point-in-polygon against sf-neighborhoods.geojson)
+ *   5. Fallback: "SF Bench #<osmId>"
  *
  * Usage:
  *   node scripts/bench-importer/import-sf-benches.js
@@ -24,6 +32,7 @@ const OUT_DIR = path.join(__dirname, "output");
 
 const GEOJSON_PATH = path.join(DATA_DIR, "benches-sf.geojson");
 const NEIGHBORHOODS_PATH = path.join(REF_DIR, "sf-neighborhoods.geojson");
+const PARKS_PATH = path.join(REF_DIR, "sf-parks.json");
 const OUT_PATH = path.join(OUT_DIR, "benches-sf.json");
 
 // ---------------------------------------------------------------------------
@@ -36,17 +45,16 @@ function centroid(geometry) {
     return { lng: coordinates[0], lat: coordinates[1] };
   }
   if (type === "LineString") {
-    // midpoint of first + last vertex
     const first = coordinates[0];
     const last = coordinates[coordinates.length - 1];
     return { lng: (first[0] + last[0]) / 2, lat: (first[1] + last[1]) / 2 };
   }
   if (type === "Polygon") {
-    // average of outer ring vertices (excluding closing duplicate)
     const ring = coordinates[0];
-    const pts = ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
-      ? ring.slice(0, -1)
-      : ring;
+    const pts =
+      ring[0][0] === ring[ring.length - 1][0] && ring[0][1] === ring[ring.length - 1][1]
+        ? ring.slice(0, -1)
+        : ring;
     const lng = pts.reduce((s, c) => s + c[0], 0) / pts.length;
     const lat = pts.reduce((s, c) => s + c[1], 0) / pts.length;
     return { lng, lat };
@@ -73,6 +81,15 @@ function rayInPolygon(lng, lat, ring) {
   return inside;
 }
 
+function buildParkLookup(parks) {
+  return (lng, lat) => {
+    for (const p of parks) {
+      if (rayInPolygon(lng, lat, p.ring)) return p.name;
+    }
+    return null;
+  };
+}
+
 function buildNeighborhoodLookup(nbhdFeatures) {
   return (lng, lat) => {
     for (const f of nbhdFeatures) {
@@ -92,23 +109,25 @@ function buildNeighborhoodLookup(nbhdFeatures) {
 
 const MAX_INSCRIPTION_LEN = 60;
 
-function deriveName(props, neighborhood, osmId) {
+function deriveName(props, parkName, neighborhood, osmId) {
   // 1. OSM name field
   if (props.name && props.name.trim()) return props.name.trim();
 
-  // 2. Inscription (truncated) — the bench has meaningful text
+  // 2. Inscription — bench has meaningful commemorative text
   if (props.inscription && props.inscription.trim()) {
     const raw = props.inscription.trim();
-    const truncated = raw.length > MAX_INSCRIPTION_LEN
+    return raw.length > MAX_INSCRIPTION_LEN
       ? raw.slice(0, MAX_INSCRIPTION_LEN).trimEnd() + "…"
       : raw;
-    return truncated;
   }
 
-  // 3. Neighborhood
+  // 3. Park name (most specific location context)
+  if (parkName) return `${parkName} bench`;
+
+  // 4. Neighborhood
   if (neighborhood) return `${neighborhood} bench`;
 
-  // 4. Fallback
+  // 5. Fallback
   return `SF Bench #${osmId}`;
 }
 
@@ -117,34 +136,38 @@ function deriveName(props, neighborhood, osmId) {
 // ---------------------------------------------------------------------------
 
 async function main() {
-  const [rawGeo, rawNbhd] = await Promise.all([
+  const [rawGeo, rawNbhd, rawParks] = await Promise.all([
     fs.readFile(GEOJSON_PATH, "utf-8"),
     fs.readFile(NEIGHBORHOODS_PATH, "utf-8"),
+    fs.readFile(PARKS_PATH, "utf-8"),
   ]);
 
   const { features } = JSON.parse(rawGeo);
   const nbhdFeatures = JSON.parse(rawNbhd).features;
+  const { parks } = JSON.parse(rawParks);
+
+  const findPark = buildParkLookup(parks);
   const findNeighborhood = buildNeighborhoodLookup(nbhdFeatures);
 
-  console.log(`Loaded ${features.length} features, ${nbhdFeatures.length} neighborhood polygons`);
+  console.log(
+    `Loaded ${features.length} features, ${parks.length} park polygons, ${nbhdFeatures.length} neighborhood polygons`
+  );
 
   const benches = [];
   let skipped = 0;
   const geomCounts = { Point: 0, LineString: 0, Polygon: 0 };
+  const nameSourceCounts = { osm: 0, inscription: 0, park: 0, neighborhood: 0, fallback: 0 };
 
   for (const feature of features) {
     const props = feature.properties ?? {};
     const rawOsmId = String(props.id ?? props["@id"] ?? "");
 
-    // Skip features without a usable ID
     if (!rawOsmId) {
       skipped++;
       continue;
     }
 
-    // Sanitize: OSM IDs like "node/12345" or "way/67890" contain slashes that
-    // break URL routing (/bench/bench-sf-node/12345 gets parsed as nested paths).
-    // Replace "/" with "-" so the ID is safe to use as a URL segment.
+    // Sanitize: OSM IDs like "node/12345" contain slashes that break URL routing.
     const osmId = rawOsmId.replace(/\//g, "-");
 
     let coords;
@@ -158,27 +181,36 @@ async function main() {
     geomCounts[feature.geometry.type] = (geomCounts[feature.geometry.type] ?? 0) + 1;
 
     const { lng, lat } = coords;
+    const parkName = findPark(lng, lat);
     const neighborhood = findNeighborhood(lng, lat);
 
     const material = (props.material ?? "").trim() || null;
     const inscription = (props.inscription ?? "").trim() || null;
     const backrest = (props.backrest ?? "").trim() || null;
 
+    // Track name source for stats
+    if (props.name?.trim()) nameSourceCounts.osm++;
+    else if (inscription) nameSourceCounts.inscription++;
+    else if (parkName) nameSourceCounts.park++;
+    else if (neighborhood) nameSourceCounts.neighborhood++;
+    else nameSourceCounts.fallback++;
+
     const signals = {
       material,
-      isPark: false,
-      donorPlaque: inscription, // treat inscriptions like donor plaques for "memorial" tag
+      isPark: !!parkName,
+      donorPlaque: inscription,
     };
     const benchType = normalizeBenchType(signals);
     const facetTags = deriveFacetTags(signals);
+    const baseTags = parkName ? ["sf-osm", "park"] : ["sf-osm"];
 
     benches.push({
       externalId: osmId,
       idPrefix: "bench-sf",
       sourceSystem: "OpenStreetMap — San Francisco",
-      name: deriveName(props, neighborhood, osmId),
+      name: deriveName(props, parkName, neighborhood, osmId),
       neighborhood: neighborhood ?? null,
-      parkName: null,
+      parkName: parkName ?? null,
       siteName: null,
       category: null,
       material,
@@ -192,14 +224,14 @@ async function main() {
       latitude: lat,
       longitude: lng,
       photos: [],
-      tags: ["sf-osm", ...facetTags],
-      isPark: false,
+      tags: [...new Set([...baseTags, ...facetTags])],
+      isPark: !!parkName,
       benchType,
       source: { osmId, properties: props },
     });
   }
 
-  // Sanity check: confirm coordinates are in SF bounding box
+  // Sanity check
   const sample = benches[0];
   if (sample) {
     const latOk = sample.latitude > 37.6 && sample.latitude < 37.95;
@@ -214,17 +246,16 @@ async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
   await fs.writeFile(OUT_PATH, JSON.stringify(benches, null, 2));
 
-  const withNeighborhood = benches.filter((b) => b.neighborhood).length;
-  const withInscription = benches.filter((b) => b.inscription).length;
-  const withName = benches.filter((b) => b.source.properties.name).length;
-
   console.log(`\nResults:`);
-  console.log(`  Total output:       ${benches.length}`);
-  console.log(`  Skipped:            ${skipped}`);
-  console.log(`  Geometry breakdown: ${JSON.stringify(geomCounts)}`);
-  console.log(`  Named (OSM name):   ${withName}`);
-  console.log(`  Named (inscription):${withInscription}`);
-  console.log(`  Named (neighborhood):${withNeighborhood}`);
+  console.log(`  Total output:        ${benches.length}`);
+  console.log(`  Skipped:             ${skipped}`);
+  console.log(`  Geometry breakdown:  ${JSON.stringify(geomCounts)}`);
+  console.log(`  Name source:`);
+  console.log(`    OSM name:          ${nameSourceCounts.osm}`);
+  console.log(`    Inscription:       ${nameSourceCounts.inscription}`);
+  console.log(`    Park name:         ${nameSourceCounts.park}`);
+  console.log(`    Neighborhood:      ${nameSourceCounts.neighborhood}`);
+  console.log(`    Fallback:          ${nameSourceCounts.fallback}`);
   console.log(`\nWrote ${benches.length} benches to ${OUT_PATH}`);
 }
 
