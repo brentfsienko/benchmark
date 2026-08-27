@@ -19,66 +19,9 @@ Stack in one sentence: **Next.js (App Router) on Vercel, talking to its own `/ap
 
 ## Architecture
 
-There is no separate backend process. The same Next.js app serves pages and the JSON API.
+One Next.js app on Vercel — no separate backend. Pages in `app/` and components in `src/` call `src/lib/api.ts`, which hits `/api/v1` route handlers. Those talk to Supabase (Postgres + PostGIS + Auth). The map is Leaflet + MapTiler; auth email goes through Resend.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  Browser (PWA)                                          │
-│  app/* pages  ·  src/components  ·  src/contexts        │
-│  src/lib/api.ts  ──fetch──►  /api/v1/*                  │
-└──────────────────────────────┬──────────────────────────┘
-                               │
-┌──────────────────────────────▼──────────────────────────┐
-│  Next.js on Vercel                                      │
-│  app/api/v1/*   Route handlers (BFF)                    │
-│  middleware.ts  Session refresh, /home auth gate        │
-│  src/lib/supabase/*  Admin + user clients               │
-└──────────────┬───────────────────────────┬──────────────┘
-               │                           │
-               ▼                           ▼
-        Supabase                     MapTiler / Resend
-        Postgres + PostGIS           Tiles / auth email
-        Auth + storage
-```
-
-### Frontend
-
-| Piece | Role |
-| --- | --- |
-| `app/` | App Router pages (`/explore`, `/home`, `/bench/[id]`, auth, profile, challenges, ops) |
-| `src/components/` | Map, sheets, feed cards, nav, photos |
-| `src/contexts/auth-context.tsx` | Session + profile for client components |
-| `src/lib/api.ts` | Typed `fetch` wrapper. Defaults to same-origin `/api/v1` |
-| Leaflet + MapTiler | Raster basemap, clustered pins on explore |
-
-UI is client-heavy where it needs map/geolocation (`"use client"`). List and detail pages still render through Next.js; data comes from the API, not directly from Supabase in the browser (except Auth).
-
-### Backend
-
-| Piece | Role |
-| --- | --- |
-| `app/api/v1/**/route.ts` | REST-ish JSON API: benches, reviews, users, follows, challenges, reports, admin flags |
-| `src/lib/request-auth.ts` | Who is calling (cookie session) |
-| `src/lib/supabase/admin.ts` | Service-role client for privileged DB work |
-| `src/lib/supabase/server.ts` | Cookie-bound user client |
-| `supabase/migrations/` | Schema, PostGIS geometry, seed |
-
-API responses use `{ data }` / `{ error }` via `src/lib/api-response.ts`. Spatial queries (nearby, pins in viewport, coverage) go through PostGIS RPCs.
-
-Auth emails are not sent by Supabase’s built-in mailer in production. A Send Email hook hits `app/api/auth/send-email`, which uses Resend. See [DEPLOYMENT.md](./DEPLOYMENT.md).
-
-### Screens
-
-| Route | What it is |
-| --- | --- |
-| `/explore` | Map + carousel, filters, coverage request |
-| `/home` | Activity feed (signed in) |
-| `/bench/[id]` | Detail, reviews, submit |
-| `/add` | Create a bench (admin-gated today) |
-| `/challenges` | Challenges + progress |
-| `/profile`, `/user/[id]`, `/friends` | Profile, follows, wishlist |
-| `/ops` | Moderation / admin |
-| `/auth/*` | Login, signup, callbacks |
+Main surfaces: `/explore` (map), `/home` (feed), `/bench/[id]`, `/challenges`, `/profile`, `/ops`.
 
 ## Run locally
 
