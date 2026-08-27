@@ -216,10 +216,15 @@ export function ExploreMap({
         }
         if (initial) appliedBootRef.current = true;
 
-        L.tileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png", {
-          attribution: '© <a href="https://stadiamaps.com/">Stadia Maps</a> © <a href="https://openmaptiles.org/">OpenMapTiles</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-          maxZoom: 20
-        }).addTo(map);
+        L.tileLayer(
+          `https://api.maptiler.com/maps/dataviz-v4-light/{z}/{x}/{y}.png?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY ?? ""}`,
+          {
+            attribution:
+              '© <a href="https://www.maptiler.com/copyright/">MapTiler</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+            maxZoom: 20,
+            tileSize: 256
+          }
+        ).addTo(map);
 
         L.control.zoom({ position: "bottomright" }).addTo(map);
 
