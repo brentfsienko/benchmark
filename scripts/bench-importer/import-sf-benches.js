@@ -134,13 +134,18 @@ async function main() {
 
   for (const feature of features) {
     const props = feature.properties ?? {};
-    const osmId = String(props.id ?? props["@id"] ?? "");
+    const rawOsmId = String(props.id ?? props["@id"] ?? "");
 
     // Skip features without a usable ID
-    if (!osmId) {
+    if (!rawOsmId) {
       skipped++;
       continue;
     }
+
+    // Sanitize: OSM IDs like "node/12345" or "way/67890" contain slashes that
+    // break URL routing (/bench/bench-sf-node/12345 gets parsed as nested paths).
+    // Replace "/" with "-" so the ID is safe to use as a URL segment.
+    const osmId = rawOsmId.replace(/\//g, "-");
 
     let coords;
     try {
