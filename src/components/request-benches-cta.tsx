@@ -166,7 +166,7 @@ export function RequestBenchesCta({
             display: "flex",
             alignItems: "flex-end",
             justifyContent: "center",
-            padding: "0 0 max(12px, var(--safe-bottom))"
+            padding: "0 0 calc(var(--nav-height) + var(--safe-bottom) + 12px)"
           }}
           onClick={() => setModalOpen(false)}
         >
@@ -178,13 +178,10 @@ export function RequestBenchesCta({
             style={{
               width: "100%",
               maxWidth: 420,
-              maxHeight: "min(88dvh, 640px)",
+              maxHeight: "min(calc(88dvh - var(--nav-height) - var(--safe-bottom)), 640px)",
               overflowY: "auto",
               WebkitOverflowScrolling: "touch",
-              borderBottomLeftRadius: 0,
-              borderBottomRightRadius: 0,
-              borderTopLeftRadius: "var(--radius-lg, 16px)",
-              borderTopRightRadius: "var(--radius-lg, 16px)",
+              borderRadius: "var(--radius-lg, 16px)",
               boxShadow: "0 -8px 32px rgba(0,0,0,0.18)",
               padding: "16px 20px 20px"
             }}
