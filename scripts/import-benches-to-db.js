@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * Idempotent upsert of Seattle park benches into Supabase.
+ * Idempotent upsert of bench records into Supabase.
+ * Works with any city — reads sourceSystem, idPrefix, tags, etc. from each record.
  *
  * Requires in .env.local:
  *   NEXT_PUBLIC_SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  *
  * Usage:
- *   npm run import:benches
  *   npm run import:benches -- --file=./scripts/bench-importer/output/benches-seattle.json
- *   npm run import:benches -- --limit=50
+ *   npm run import:benches:sf
+ *   npm run import:benches -- --file=<path> --limit=50
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -22,14 +23,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 loadEnv({ path: path.join(ROOT, ".env.local") });
 
-const SOURCE_SYSTEM = "Seattle Parks & Recreation (DPR) GIS — Park Bench";
-const DEFAULT_FILE = path.join(
-  ROOT,
-  "scripts",
-  "bench-importer",
-  "output",
-  "benches-seattle.json"
-);
+const DEFAULT_FILE = null; // must always supply --file
 
 function argValue(flag) {
   const hit = process.argv.find((a) => a.startsWith(`${flag}=`));
@@ -47,18 +41,28 @@ function buildDescription(bench) {
 }
 
 function toRpcPayload(bench) {
-  const neighborhood = bench.parkName || bench.siteName || "Seattle";
+  const neighborhood = bench.neighborhood ?? bench.parkName ?? bench.siteName ?? "Unknown";
+  const idPrefix = bench.idPrefix ?? "bench";
+
+  // Re-derive bench type + facet tags if the record doesn't already have them
+  // (Seattle records don't include these fields; SF records do)
   const signals = {
     category: bench.category,
     material: bench.material,
     donorPlaque: bench.donorPlaque,
-    isPark: true
+    isPark: bench.isPark ?? true,
+    existingType: bench.benchType,
   };
-  const benchType = normalizeBenchType(signals);
-  const facetTags = deriveFacetTags(signals);
+  const benchType = bench.benchType ?? normalizeBenchType(signals);
+  const facetTags = bench.tags
+    ? bench.tags.filter((t) => ["park", "memorial", "historic"].includes(t))
+    : deriveFacetTags(signals);
+  const allTags = bench.tags ?? ["seattle-parks", ...facetTags];
+
   const photoUrls = (bench.photos || []).map((p) => p.url).filter(Boolean);
+
   return {
-    p_id: `bench-sea-${bench.externalId}`,
+    p_id: `${idPrefix}-${bench.externalId}`,
     p_name: bench.name,
     p_neighborhood: neighborhood,
     p_bench_type: benchType,
@@ -66,26 +70,35 @@ function toRpcPayload(bench) {
     p_lat: bench.latitude,
     p_lng: bench.longitude,
     p_external_id: String(bench.externalId),
-    p_global_id: bench.globalId,
-    p_source_system: SOURCE_SYSTEM,
-    p_park_name: bench.parkName,
-    p_site_name: bench.siteName,
-    p_category: bench.category,
-    p_material: bench.material,
-    p_length_ft: bench.lengthFt,
-    p_year_installed: bench.yearInstalled,
-    p_donor_plaque: bench.donorPlaque,
-    p_program: bench.program,
-    p_donor_status: bench.donorStatus,
+    p_global_id: bench.globalId ?? null,
+    p_source_system: bench.sourceSystem,
+    p_park_name: bench.parkName ?? null,
+    p_site_name: bench.siteName ?? null,
+    p_category: bench.category ?? null,
+    p_material: bench.material ?? null,
+    p_length_ft: bench.lengthFt ?? null,
+    p_year_installed: bench.yearInstalled ?? null,
+    p_donor_plaque: bench.donorPlaque ?? null,
+    p_program: bench.program ?? null,
+    p_donor_status: bench.donorStatus ?? null,
     p_photo_urls: photoUrls,
     p_source_raw: bench.source?.rawRow ?? null,
     p_created_by_user_id: "user-1",
-    p_tags: ["seattle-parks", ...facetTags]
+    p_tags: allTags,
   };
 }
 
 async function main() {
-  const file = path.resolve(ROOT, argValue("--file") || DEFAULT_FILE);
+  const fileArg = argValue("--file");
+  if (!fileArg) {
+    console.error(
+      "Usage: node scripts/import-benches-to-db.js -- --file=<path> [--limit=<n>]\n" +
+        "  e.g. npm run import:benches -- --file=./scripts/bench-importer/output/benches-seattle.json\n" +
+        "       npm run import:benches:sf"
+    );
+    process.exit(1);
+  }
+  const file = path.resolve(ROOT, fileArg);
   const limitRaw = argValue("--limit");
   const limit = limitRaw ? Number(limitRaw) : null;
 
@@ -107,8 +120,7 @@ async function main() {
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
-  let created = 0;
-  let updated = 0;
+  let succeeded = 0;
   let errors = 0;
   const errorSamples = [];
 
@@ -118,40 +130,30 @@ async function main() {
     const bench = benches[i];
     const payload = toRpcPayload(bench);
 
-    const { data: existing } = await supabase
-      .from("benches")
-      .select("id")
-      .eq("source_system", SOURCE_SYSTEM)
-      .eq("external_id", String(bench.externalId))
-      .maybeSingle();
-
     const { error } = await supabase.rpc("upsert_imported_bench", payload);
     if (error) {
       errors++;
       if (errorSamples.length < 8) {
-        errorSamples.push(`OBJECTID ${bench.externalId}: ${error.message}`);
+        errorSamples.push(`${bench.externalId}: ${error.message}`);
       }
-    } else if (existing?.id) {
-      updated++;
     } else {
-      created++;
+      succeeded++;
     }
 
     if ((i + 1) % 100 === 0 || i + 1 === benches.length) {
-      console.log(`  ${i + 1}/${benches.length} (created ${created}, updated ${updated}, errors ${errors})`);
+      console.log(`  ${i + 1}/${benches.length} (ok ${succeeded}, errors ${errors})`);
     }
   }
 
   console.log("\nSummary");
-  console.log(`  created: ${created}`);
-  console.log(`  updated: ${updated}`);
-  console.log(`  errors:  ${errors}`);
+  console.log(`  succeeded: ${succeeded}`);
+  console.log(`  errors:    ${errors}`);
   if (errorSamples.length) {
     console.log("  sample errors:");
     for (const line of errorSamples) console.log(`   - ${line}`);
   }
 
-  if (errors > 0 && created + updated === 0) process.exit(1);
+  if (errors > 0 && succeeded === 0) process.exit(1);
 }
 
 main().catch((err) => {

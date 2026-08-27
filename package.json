@@ -17,6 +17,8 @@
     "import:benches": "node scripts/import-benches-to-db.js",
     "import:benches:rename": "node scripts/bench-importer/rename-benches.js",
     "import:benches:types": "node scripts/bench-importer/normalize-bench-types.js",
+    "import:benches:sf:parse": "node scripts/bench-importer/import-sf-benches.js",
+    "import:benches:sf": "node scripts/import-benches-to-db.js -- --file=./scripts/bench-importer/output/benches-sf.json",
     "email:test": "node scripts/send-test-email.mjs"
   },
   "dependencies": {
