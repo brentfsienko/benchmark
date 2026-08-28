@@ -25,13 +25,13 @@ export type AuthEmailData = {
 const DEFAULT_SITE_URL = "https://benchmark.rest";
 
 const SUBJECTS: Record<string, string> = {
-  signup: "Confirm your Benchmark email",
-  invite: "You're invited to Benchmark",
-  magiclink: "Your Benchmark sign-in link",
-  recovery: "Reset your Benchmark password",
-  email_change: "Confirm your new Benchmark email",
-  email_change_new: "Confirm your new Benchmark email",
-  reauthentication: "Your Benchmark verification code"
+  signup: "almost there — confirm your benchmark email",
+  invite: "you've been invited to benchmark",
+  magiclink: "your benchmark sign-in link",
+  recovery: "reset your benchmark password",
+  email_change: "confirm your new email on benchmark",
+  email_change_new: "confirm your new email on benchmark",
+  reauthentication: "your benchmark verification code"
 };
 
 /** Map Supabase hook action → verifyOtp type (SSR-safe token_hash flow). */
@@ -98,13 +98,16 @@ export function buildAuthEmailHtml(emailData: AuthEmailData, _toEmail: string): 
 
   if (action === "reauthentication") {
     return emailShell({
-      title: "Your verification code",
+      title: "verification code",
       bodyHtml: `
         <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#605847;">
-          Use this code to verify your Benchmark account:
+          here's your one-time code to verify your account:
         </p>
-        <p style="margin:0 0 8px;font-size:28px;font-weight:700;letter-spacing:0.14em;color:#23201b;">
+        <p style="margin:0 0 8px;font-size:32px;font-weight:700;letter-spacing:0.18em;color:#23201b;font-variant-numeric:tabular-nums;">
           ${escapeHtml(token)}
+        </p>
+        <p style="margin:8px 0 0;font-size:13px;color:#8a7a62;">
+          expires shortly. don't share this with anyone.
         </p>
       `,
       cta: null,
@@ -114,54 +117,54 @@ export function buildAuthEmailHtml(emailData: AuthEmailData, _toEmail: string): 
 
   const copy: Record<string, { title: string; body: string; cta: string }> = {
     signup: {
-      title: "Confirm your email",
-      body: "Tap the button below to confirm your email and finish signing up for Benchmark.",
-      cta: "Confirm email"
+      title: "one last step",
+      body: "tap below to confirm your email and claim your seat.",
+      cta: "confirm email →"
     },
     invite: {
-      title: "You're invited",
-      body: "You've been invited to Benchmark. Tap below to create your account.",
-      cta: "Accept invite"
+      title: "you're invited",
+      body: "someone saved a seat for you on benchmark. tap below to create your account.",
+      cta: "accept invite →"
     },
     magiclink: {
-      title: "Sign in to Benchmark",
-      body: "Tap below to sign in. This link expires shortly and can only be used once.",
-      cta: "Sign in"
+      title: "here's your link",
+      body: "tap below to sign in. this link works once and expires soon — use it or lose it.",
+      cta: "sign in →"
     },
     recovery: {
-      title: "Reset your password",
-      body: "We received a request to reset your Benchmark password. Tap below to choose a new one.",
-      cta: "Reset password"
+      title: "password reset",
+      body: "someone (hopefully you) asked to reset your benchmark password. tap below to choose a new one.",
+      cta: "reset password →"
     },
     email_change: {
-      title: "Confirm your new email",
-      body: "Tap below to confirm your new email address for Benchmark.",
-      cta: "Confirm new email"
+      title: "confirm your new email",
+      body: "tap below to confirm your updated email address on benchmark.",
+      cta: "confirm email →"
     },
     email_change_new: {
-      title: "Confirm your new email",
-      body: "Tap below to confirm your new email address for Benchmark.",
-      cta: "Confirm new email"
+      title: "confirm your new email",
+      body: "tap below to confirm your updated email address on benchmark.",
+      cta: "confirm email →"
     }
   };
 
   const content = copy[action] ?? {
-    title: "Benchmark",
-    body: "Tap the button below to continue.",
-    cta: "Continue"
+    title: "benchmark",
+    body: "tap the button below to continue.",
+    cta: "continue →"
   };
 
   const blurb =
     action === "signup" || action === "invite"
-      ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.55;color:#605847;">
-           Mark the benches you love, leave a rating, and take a seat with the rest of us.
+      ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#7a6a52;">
+           mark the benches you love, drop a benchmark, and take a seat with the rest of us.
          </p>`
       : "";
 
   return emailShell({
     title: content.title,
     bodyHtml: `
-      <p style="margin:0 0 12px;font-size:15px;line-height:1.5;color:#605847;">
+      <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#605847;">
         ${escapeHtml(content.body)}
       </p>
       ${blurb}
@@ -180,16 +183,20 @@ function emailShell(opts: {
   const button =
     opts.cta && opts.confirmationUrl
       ? `
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 24px;">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 28px;">
         <tr>
-          <td style="border-radius:10px;background:#2d6a4f;">
+          <td style="border-radius:6px;background:#23201b;">
             <a href="${escapeHtml(opts.confirmationUrl)}"
-               style="display:inline-block;padding:12px 22px;font-size:15px;font-weight:700;color:#f6f5f1;text-decoration:none;border-radius:10px;">
+               style="display:inline-block;padding:13px 24px;font-size:14px;font-weight:700;color:#f7f1e8;text-decoration:none;border-radius:6px;letter-spacing:0.03em;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;">
               ${escapeHtml(opts.cta)}
             </a>
           </td>
         </tr>
       </table>
+      <p style="margin:0 0 20px;font-size:12px;line-height:1.5;color:#9a8a72;">
+        button not working?
+        <a href="${escapeHtml(opts.confirmationUrl)}" style="color:#605847;text-decoration:underline;word-break:break-all;">${escapeHtml(opts.confirmationUrl)}</a>
+      </p>
     `
       : "";
 
@@ -200,48 +207,59 @@ function emailShell(opts: {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(opts.title)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f5efe4;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5efe4;padding:28px 12px;">
+<body style="margin:0;padding:0;background:#efe8db;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#efe8db;padding:32px 12px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;background:#f7f1e8;border:1px solid #dacfbf;border-radius:16px;overflow:hidden;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:500px;">
+
+          <!-- wordmark -->
           <tr>
-            <td style="padding:22px 24px 8px;background:#efe5d6;border-bottom:1px solid #dacfbf;">
+            <td style="padding:0 0 20px;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td style="vertical-align:middle;">
                     <img
                       src="https://benchmark.rest/app-icon.png"
-                      width="36"
-                      height="36"
-                      alt="Benchmark"
-                      style="display:block;width:36px;height:36px;border-radius:8px;border:0;"
+                      width="32"
+                      height="32"
+                      alt=""
+                      style="display:block;width:32px;height:32px;border-radius:7px;border:0;"
                     />
                   </td>
-                  <td style="padding-left:10px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:18px;font-weight:700;color:#23201b;letter-spacing:0.06em;text-transform:lowercase;vertical-align:middle;">
+                  <td style="padding-left:9px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:16px;font-weight:800;color:#23201b;letter-spacing:0.04em;text-transform:lowercase;vertical-align:middle;">
                     benchmark
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
+
+          <!-- card -->
           <tr>
-            <td style="padding:24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color:#23201b;">
-              <h1 style="margin:0 0 12px;font-size:22px;line-height:1.25;font-weight:700;letter-spacing:-0.02em;">
-                ${escapeHtml(opts.title)}
-              </h1>
-              ${opts.bodyHtml}
-              ${button}
-              <p style="margin:0;font-size:12px;line-height:1.45;color:#605847;">
-                If you did not request this, you can ignore this email.
-              </p>
+            <td style="background:#f7f0e5;border:1px solid #d8cdb8;border-radius:12px;overflow:hidden;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="padding:28px 28px 0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;color:#23201b;">
+                    <h1 style="margin:0 0 16px;font-size:24px;line-height:1.2;font-weight:800;letter-spacing:-0.025em;text-transform:lowercase;">
+                      ${escapeHtml(opts.title)}
+                    </h1>
+                    ${opts.bodyHtml}
+                    ${button}
+                    <p style="margin:0 0 28px;font-size:12px;line-height:1.5;color:#9a8a72;">
+                      didn't ask for this? you can safely ignore it — nothing will change.
+                    </p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:14px 28px;border-top:1px solid #d8cdb8;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:12px;color:#9a8a72;">
+                    benchmark · <a href="https://benchmark.rest" style="color:#605847;text-decoration:none;">benchmark.rest</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
-          <tr>
-            <td style="padding:14px 24px 18px;border-top:1px solid #dacfbf;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;font-size:12px;color:#605847;">
-              Benchmark · <a href="https://benchmark.rest" style="color:#2d6a4f;text-decoration:none;">benchmark.rest</a>
-            </td>
-          </tr>
+
         </table>
       </td>
     </tr>
@@ -253,10 +271,16 @@ function emailShell(opts: {
 export function buildAuthEmailText(emailData: AuthEmailData, _toEmail: string): string {
   const action = emailData.email_action_type;
   if (action === "reauthentication") {
-    return `Your Benchmark verification code is ${emailData.token ?? ""}.\n\n— Benchmark`;
+    return `your benchmark verification code: ${emailData.token ?? ""}\n\nexpires shortly. don't share it.\n\n— benchmark (benchmark.rest)`;
   }
   const confirmationUrl = buildAuthConfirmationUrl(emailData);
-  return `Confirm your Benchmark email\n\nOpen this button-equivalent link to continue:\n${confirmationUrl}\n\nIf you did not request this, ignore this email.\n\n— Benchmark (benchmark.rest)\n`;
+  const actionLine =
+    action === "recovery"
+      ? "someone (hopefully you) asked to reset your benchmark password. open the link below to choose a new one."
+      : action === "signup" || action === "invite"
+      ? "tap the link below to confirm your email and claim your seat."
+      : "open the link below to continue.";
+  return `benchmark\n\n${actionLine}\n\n${confirmationUrl}\n\ndidn't ask for this? ignore this email — nothing will change.\n\n— benchmark (benchmark.rest)`;
 }
 
 function escapeHtml(value: string): string {
