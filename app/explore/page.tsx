@@ -19,6 +19,7 @@ import type { ViewportBounds } from "@/src/components/explore-map";
 import {
   EXPLORE_RETURN_KEY,
   NEARBY_ZOOM,
+  padViewportBounds,
   readSavedMapView,
   stashExploreReturnView,
   takeExploreReturnView,
@@ -70,30 +71,6 @@ function pinInBounds(b: BenchPin, bounds: ViewportBounds): boolean {
   );
 }
 
-/** Expand viewport slightly so cache keeps pins just off-screen while panning. */
-function padBounds(bounds: ViewportBounds, factor = 0.35): ViewportBounds {
-  const latSpan = Math.max(bounds.ne_lat - bounds.sw_lat, 0.0001);
-  const crosses = bounds.sw_lng > bounds.ne_lng;
-  const lngSpan = crosses
-    ? Math.max(180 - bounds.sw_lng + (bounds.ne_lng + 180), 0.0001)
-    : Math.max(bounds.ne_lng - bounds.sw_lng, 0.0001);
-  const latPad = latSpan * factor;
-  const lngPad = lngSpan * factor;
-  let sw_lng = bounds.sw_lng - lngPad;
-  let ne_lng = bounds.ne_lng + lngPad;
-  if (!crosses) {
-    if (sw_lng < -180) sw_lng += 360;
-    if (ne_lng > 180) ne_lng -= 360;
-  }
-  return {
-    sw_lat: Math.max(-90, bounds.sw_lat - latPad),
-    ne_lat: Math.min(90, bounds.ne_lat + latPad),
-    sw_lng,
-    ne_lng,
-    zoom: bounds.zoom
-  };
-}
-
 /** True when `inner` viewport is fully inside a previously fetched `outer` region. */
 function boundsFullyInside(inner: ViewportBounds, outer: ViewportBounds): boolean {
   if (inner.sw_lat < outer.sw_lat - 1e-9 || inner.ne_lat > outer.ne_lat + 1e-9) return false;
@@ -113,7 +90,7 @@ function evictPinCache(cache: Map<string, BenchPin>, keepNear: ViewportBounds | 
     if (cache.size > PIN_CACHE_MAX) cache.clear();
     return;
   }
-  const padded = padBounds(keepNear, 0.75);
+  const padded = padViewportBounds(keepNear, 0.75);
   for (const [id, pin] of cache) {
     if (!pinInBounds(pin, padded)) cache.delete(id);
   }
@@ -297,7 +274,7 @@ export default function ExplorePage() {
     pinAbortRef.current = ac;
     const gen = ++pinFetchGenRef.current;
     // Fetch a padded region so small pans / walks stay covered by cache.
-    const fetchBounds = padBounds(bounds, 0.5);
+    const fetchBounds = padViewportBounds(bounds, 0.5);
     const minRating = filtersRef.current.minRating;
     try {
       const data = await listBenchPins(fetchBounds, minRating, {
