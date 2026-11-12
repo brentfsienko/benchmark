@@ -6,7 +6,8 @@ export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (
     path.startsWith("/api/v1/benches/pins") ||
-    path.startsWith("/api/v1/benches/search")
+    path.startsWith("/api/v1/benches/search") ||
+    path.startsWith("/api/v1/places/search")
   ) {
     return NextResponse.next();
   }

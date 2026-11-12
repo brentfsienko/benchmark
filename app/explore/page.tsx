@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import {
+  type CSSProperties,
   FormEvent,
   PointerEvent as ReactPointerEvent,
   useCallback,
@@ -10,12 +11,13 @@ import {
   useRef,
   useState
 } from "react";
-import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, searchBenches, updateBenchLocation } from "@/src/lib/api";
+import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, searchBenches, searchPlaces, updateBenchLocation } from "@/src/lib/api";
+import { PLACE_MAX_ZOOM, PLACE_POINT_ZOOM, type PlaceResult } from "@/src/lib/places";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { Toast } from "@/src/components/toast";
 import { RequestBenchesCta } from "@/src/components/request-benches-cta";
-import type { ViewportBounds } from "@/src/components/explore-map";
+import type { MapFlyTo, ViewportBounds } from "@/src/components/explore-map";
 import {
   EXPLORE_RETURN_KEY,
   NEARBY_ZOOM,
@@ -144,6 +146,34 @@ function centerFocusBounds(bounds: ViewportBounds, fraction = CAROUSEL_FOCUS_FRA
   };
 }
 
+const searchResultButtonStyle: CSSProperties = {
+  display: "block",
+  width: "100%",
+  textAlign: "left",
+  padding: "10px 12px",
+  border: "none",
+  borderBottom: "1px solid var(--border)",
+  background: "transparent",
+  cursor: "pointer",
+  fontFamily: "inherit"
+};
+
+const searchSectionLabelStyle: CSSProperties = {
+  margin: 0,
+  padding: "8px 12px 4px",
+  fontSize: 10,
+  fontWeight: 600,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase"
+};
+
+const PinOutlineIcon = () => (
+  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+    <path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z" />
+    <circle cx={12} cy={9.5} r={2.5} />
+  </svg>
+);
+
 const PlusIcon = () => (
   <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
     <line x1={12} y1={5} x2={12} y2={19} />
@@ -214,6 +244,8 @@ export default function ExplorePage() {
   const toastKey = useRef(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BenchPin[]>([]);
+  const [placeResults, setPlaceResults] = useState<PlaceResult[]>([]);
+  const searchSeqRef = useRef(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -223,7 +255,7 @@ export default function ExplorePage() {
   const [addFormDragging, setAddFormDragging] = useState(false);
   const addFormDragStartY = useRef(0);
   const addFormDragStartVh = useRef(ADD_FORM_PEEK_VH);
-  const flyToRef = useRef<(lat: number, lng: number) => void>(() => {});
+  const flyToRef = useRef<MapFlyTo>(() => {});
   const [bootView, setBootView] = useState<SavedMapView | null>(null);
   const [coverageRequestDismissed, setCoverageRequestDismissed] = useState(false);
   const pinFetchGenRef = useRef(0);
@@ -481,20 +513,28 @@ export default function ExplorePage() {
   useEffect(() => {
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const q = searchQuery.trim();
+    const seq = ++searchSeqRef.current;
     if (q.length < 2) {
       setSearchResults([]);
+      setPlaceResults([]);
       setSearchLoading(false);
       return;
     }
     setSearchLoading(true);
     searchTimerRef.current = setTimeout(() => {
-      searchBenches(q, 12)
-        .then((rows) => {
-          setSearchResults(rows);
-          setSearchOpen(true);
-        })
-        .catch(() => setSearchResults([]))
-        .finally(() => setSearchLoading(false));
+      const view = readSavedMapView();
+      // Benches and places in parallel; either can fail without hiding the other.
+      Promise.allSettled([
+        searchBenches(q, 12),
+        searchPlaces(q, { limit: 4, near: view ? { lat: view.lat, lng: view.lng } : undefined })
+      ]).then(([benches, places]) => {
+        // A newer keystroke already started its own search — drop this one.
+        if (seq !== searchSeqRef.current) return;
+        setSearchResults(benches.status === "fulfilled" ? benches.value : []);
+        setPlaceResults(places.status === "fulfilled" ? places.value : []);
+        setSearchOpen(true);
+        setSearchLoading(false);
+      });
     }, 220);
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -606,6 +646,23 @@ export default function ExplorePage() {
     [openBenchDetail, stashReturnViewBeforeFly]
   );
 
+  const handlePlaceSelect = useCallback((place: PlaceResult) => {
+    setSearchQuery(place.name);
+    setSearchOpen(false);
+    setSearchExpanded(false);
+    setSearchResults([]);
+    setPlaceResults([]);
+    // Let the carousel pick a bench near the new center instead of holding the old one.
+    setSelectedBenchID(null);
+    // No suppressPinFetch: this is a new area, so moveend should load its pins.
+    flyToRef.current(
+      place.latitude,
+      place.longitude,
+      place.bbox ? { bounds: place.bbox, maxZoom: PLACE_MAX_ZOOM } : { zoom: PLACE_POINT_ZOOM }
+    );
+    trackEvent({ name: "place_search_selected", metadata: { place: place.name } });
+  }, []);
+
   const showToast = useCallback((message: string) => {
     toastKey.current += 1;
     setToast(message);
@@ -683,7 +740,7 @@ export default function ExplorePage() {
     flyToRef.current(bench.latitude, bench.longitude);
   }, [selectedBenchID, openBenchDetail, stashReturnViewBeforeFly]);
 
-  const handleMapReady = useCallback((flyTo: (lat: number, lng: number) => void) => {
+  const handleMapReady = useCallback((flyTo: MapFlyTo) => {
     flyToRef.current = flyTo;
   }, []);
 
@@ -881,7 +938,7 @@ export default function ExplorePage() {
                   setSearchOpen(true);
                 }}
                 onFocus={() => {
-                  if (searchResults.length > 0) setSearchOpen(true);
+                  if (searchResults.length > 0 || placeResults.length > 0) setSearchOpen(true);
                 }}
                 onBlur={() => {
                   // Keep open while interacting with results; collapse if empty shortly after.
@@ -890,7 +947,7 @@ export default function ExplorePage() {
                   }, 180);
                 }}
                 placeholder="name or place…"
-                aria-label="Search benches by name or location"
+                aria-label="Search benches or places"
                 style={{
                   width: "min(52vw, 220px)",
                   height: 36,
@@ -949,25 +1006,40 @@ export default function ExplorePage() {
               >
                 {searchLoading ? (
                   <p className="muted" style={{ margin: 0, padding: 12, fontSize: 13 }}>searching…</p>
-                ) : searchResults.length === 0 ? (
-                  <p className="muted" style={{ margin: 0, padding: 12, fontSize: 13 }}>no benches found</p>
+                ) : searchResults.length === 0 && placeResults.length === 0 ? (
+                  <p className="muted" style={{ margin: 0, padding: 12, fontSize: 13 }}>no benches or places found</p>
                 ) : (
-                  searchResults.map((pin) => (
+                  <>
+                  {placeResults.length > 0 ? (
+                    <p className="muted" style={searchSectionLabelStyle}>places</p>
+                  ) : null}
+                  {placeResults.map((place) => (
+                    <button
+                      key={`place-${place.id}`}
+                      type="button"
+                      onClick={() => handlePlaceSelect(place)}
+                      style={searchResultButtonStyle}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+                        <PinOutlineIcon />
+                        {place.name}
+                      </span>
+                      {place.label ? (
+                        <span className="muted" style={{ display: "block", fontSize: 11, paddingLeft: 18 }}>
+                          {place.label}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                  {placeResults.length > 0 && searchResults.length > 0 ? (
+                    <p className="muted" style={searchSectionLabelStyle}>benches</p>
+                  ) : null}
+                  {searchResults.map((pin) => (
                     <button
                       key={pin.id}
                       type="button"
                       onClick={() => handleSearchSelect(pin)}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "10px 12px",
-                        border: "none",
-                        borderBottom: "1px solid var(--border)",
-                        background: "transparent",
-                        cursor: "pointer",
-                        fontFamily: "inherit"
-                      }}
+                      style={searchResultButtonStyle}
                     >
                       <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{pin.name}</span>
                       <span className="muted" style={{ fontSize: 11 }}>
@@ -975,7 +1047,8 @@ export default function ExplorePage() {
                         {pin.type && pin.type !== "unknown" ? ` · ${pin.type}` : ""}
                       </span>
                     </button>
-                  ))
+                  ))}
+                  </>
                 )}
               </div>
             ) : null}
