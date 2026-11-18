@@ -17,6 +17,16 @@ import {
 } from "@/src/lib/map-view";
 import { FogOverlay } from "./fog-overlay";
 
+/**
+ * Move the camera so (lat, lng) sits at the visual center. With no options the zoom is kept
+ * (bench selection); `bounds` ([w, s, e, n]) fits a place's extent, `zoom` sets it outright.
+ */
+export type MapFlyTo = (
+  lat: number,
+  lng: number,
+  opts?: { zoom?: number; bounds?: [number, number, number, number]; maxZoom?: number }
+) => void;
+
 export type ViewportBounds = {
   sw_lat: number;
   sw_lng: number;
@@ -68,7 +78,7 @@ type ExploreMapProps = {
   benches: BenchPin[];
   selectedBenchID: string | null;
   onSelectBench: (bench: BenchPin) => void;
-  onMapReady?: (flyTo: (lat: number, lng: number) => void) => void;
+  onMapReady?: (flyTo: MapFlyTo) => void;
   onBoundsChange?: (bounds: ViewportBounds) => void;
   addMode?: boolean;
   tempPlacement?: { lat: number; lng: number } | null;
@@ -242,12 +252,22 @@ export function ExploreMap({
           emitBoundsRef.current(map);
         });
 
-        const flyTo = (lat: number, lng: number) => {
-          const zoom = map.getZoom();
+        const flyTo: MapFlyTo = (lat, lng, opts) => {
+          let zoom = map.getZoom();
+          if (opts?.bounds) {
+            const [w, s, e, n] = opts.bounds;
+            // Antimeridian-crossing extents (w > e): unwrap east so Leaflet sees one box.
+            const fit = L.latLngBounds([s, w], [n, e < w ? e + 360 : e]);
+            zoom = map.getBoundsZoom(fit);
+          } else if (opts?.zoom !== undefined) {
+            zoom = opts.zoom;
+          }
+          if (opts?.maxZoom !== undefined) zoom = Math.min(zoom, opts.maxZoom);
           const projected = map.project([lat, lng], zoom);
           const adjusted = L.point(projected.x, projected.y + VISUAL_CENTER_OFFSET_Y_PX);
           const center = map.unproject(adjusted, zoom);
-          map.flyTo(center, zoom, { duration: 0.4 });
+          // Jumps to a new place travel further than bench-to-bench hops — give them time.
+          map.flyTo(center, zoom, { duration: opts ? 1.1 : 0.4 });
         };
         onMapReadyRef.current?.(flyTo);
 

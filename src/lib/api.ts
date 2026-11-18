@@ -1,5 +1,6 @@
 import { env, getApiBaseUrl } from "./env";
 import { normalizeViewportBounds } from "./map-view";
+import type { PlaceResult } from "./places";
 import type {
   ActivityItem,
   Bench,
@@ -117,6 +118,24 @@ export function searchBenches(query: string, limit = 20): Promise<BenchPin[]> {
   if (q.length < 2) return Promise.resolve([]);
   const params = new URLSearchParams({ q, limit: String(limit) });
   return request<BenchPin[]>(`/benches/search?${params.toString()}`);
+}
+
+/**
+ * Geocode a place name (city, neighborhood, address, park). `near` biases ranking toward
+ * the current map view; it is rounded to ~10 km so the exact camera position never leaves.
+ */
+export function searchPlaces(
+  query: string,
+  opts: { limit?: number; near?: { lat: number; lng: number } } = {}
+): Promise<PlaceResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return Promise.resolve([]);
+  const params = new URLSearchParams({ q, limit: String(opts.limit ?? 5) });
+  if (opts.near) {
+    params.set("lat", opts.near.lat.toFixed(1));
+    params.set("lng", opts.near.lng.toFixed(1));
+  }
+  return request<PlaceResult[]>(`/places/search?${params.toString()}`);
 }
 
 export function getBench(benchID: string): Promise<Bench> {
