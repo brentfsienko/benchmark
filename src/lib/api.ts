@@ -1,6 +1,6 @@
 import { env, getApiBaseUrl } from "./env";
 import { normalizeViewportBounds } from "./map-view";
-import type { PlaceResult } from "./places";
+import { buildMapTilerGeocodingUrl, parseMapTilerGeocoding, type PlaceResult } from "./places";
 import type {
   ActivityItem,
   Bench,
@@ -123,17 +123,36 @@ export function searchBenches(query: string, limit = 20): Promise<BenchPin[]> {
 /**
  * Geocode a place name (city, neighborhood, address, park). `near` biases ranking toward
  * the current map view; it is rounded to ~10 km so the exact camera position never leaves.
+ *
+ * In the browser this calls MapTiler directly with the public tiles key, which MapTiler
+ * accepts from the site's own origin. If that fails (no key, network, quota), it falls
+ * back to the server route, which uses MAPTILER_GEOCODING_KEY.
  */
-export function searchPlaces(
+export async function searchPlaces(
   query: string,
   opts: { limit?: number; near?: { lat: number; lng: number } } = {}
 ): Promise<PlaceResult[]> {
   const q = query.trim();
-  if (q.length < 2) return Promise.resolve([]);
-  const params = new URLSearchParams({ q, limit: String(opts.limit ?? 5) });
-  if (opts.near) {
-    params.set("lat", opts.near.lat.toFixed(1));
-    params.set("lng", opts.near.lng.toFixed(1));
+  if (q.length < 2) return [];
+  const limit = opts.limit ?? 5;
+  const near = opts.near
+    ? { lat: Number(opts.near.lat.toFixed(1)), lng: Number(opts.near.lng.toFixed(1)) }
+    : undefined;
+
+  const publicKey = process.env.NEXT_PUBLIC_MAPTILER_KEY ?? "";
+  if (publicKey && typeof window !== "undefined") {
+    try {
+      const res = await fetch(buildMapTilerGeocodingUrl(q, publicKey, { limit, proximity: near }));
+      if (res.ok) return parseMapTilerGeocoding(await res.json());
+    } catch {
+      // Fall through to the server route.
+    }
+  }
+
+  const params = new URLSearchParams({ q, limit: String(limit) });
+  if (near) {
+    params.set("lat", String(near.lat));
+    params.set("lng", String(near.lng));
   }
   return request<PlaceResult[]>(`/places/search?${params.toString()}`);
 }
