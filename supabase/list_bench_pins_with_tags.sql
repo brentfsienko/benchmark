@@ -3,6 +3,21 @@
 --
 -- Perf: select/limit pin rows first (GiST bbox), then LEFT JOIN LATERAL tags
 -- for the ≤72–280 survivors — avoids correlated tag lookups on every candidate.
+--
+-- Wide / world viewports: benches.geom is geography, so `geom && envelope`
+-- turns the viewport into a geography polygon whose edges are great circles,
+-- not lines of latitude. That breaks once the box gets big:
+--   * a -90..90 box has pole-to-pole edges, and PostGIS raises
+--     "Antipodal (180 degrees long) edge detected!" (XX000). The explore map
+--     sends exactly that when zoomed out to ~2.
+--   * edges spanning ≥180° of longitude take the short way round the globe
+--     instead, so a -180..180 box matches no benches at all and other >180°
+--     boxes drop whole regions.
+--   * past ~90° the edges bow far enough from the parallels to drop benches
+--     along the equator-side edge of the box.
+-- Viewports wider than 90° in either direction now filter on geom::geometry,
+-- a plain lat/lng rectangle (backed by its own GiST index). Viewports up to 90°
+-- keep the geography filter on benches_geom_idx exactly as before.
 
 DROP FUNCTION IF EXISTS list_bench_pins(double precision, double precision, double precision, double precision, double precision);
 DROP FUNCTION IF EXISTS list_bench_pins(double precision, double precision, double precision, double precision, double precision, double precision);
@@ -39,6 +54,7 @@ DECLARE
   v_crosses_antimeridian boolean := p_sw_lng > p_ne_lng;
   v_lat_span double precision;
   v_lng_span double precision;
+  v_wide boolean;
   v_limit integer;
   v_grid_cols integer;
   v_grid_rows integer;
@@ -49,6 +65,8 @@ BEGIN
   ELSE
     v_lng_span := GREATEST(v_ne_lng - v_sw_lng, 0.0001);
   END IF;
+  -- Too big for a geography envelope (see header) — filter on geometry instead.
+  v_wide := GREATEST(v_lat_span, v_lng_span) > 90.0;
 
   IF p_limit IS NOT NULL AND p_limit > 0 THEN
     v_limit := LEAST(p_limit, 400);
@@ -168,6 +186,11 @@ BEGIN
         (p_min_rating IS NULL OR b.average_rating >= p_min_rating)
         AND (
           CASE
+            WHEN v_wide AND v_crosses_antimeridian THEN
+              b.geom::geometry && ST_MakeEnvelope(v_sw_lng, v_sw_lat, 180, v_ne_lat, 4326)
+              OR b.geom::geometry && ST_MakeEnvelope(-180, v_sw_lat, v_ne_lng, v_ne_lat, 4326)
+            WHEN v_wide THEN
+              b.geom::geometry && ST_MakeEnvelope(v_sw_lng, v_sw_lat, v_ne_lng, v_ne_lat, 4326)
             WHEN v_crosses_antimeridian THEN
               b.geom && ST_MakeEnvelope(v_sw_lng, v_sw_lat, 180, v_ne_lat, 4326)
               OR b.geom && ST_MakeEnvelope(-180, v_sw_lat, v_ne_lng, v_ne_lat, 4326)
@@ -200,3 +223,7 @@ GRANT EXECUTE ON FUNCTION list_bench_pins(
 ) TO anon, authenticated, service_role;
 
 CREATE INDEX IF NOT EXISTS bench_tags_tag_idx ON bench_tags (tag);
+
+-- Planar bbox index for the wide-viewport branch above (geom::geometry && box).
+CREATE INDEX IF NOT EXISTS benches_geom_geometry_idx
+  ON benches USING GIST ((geom::geometry));

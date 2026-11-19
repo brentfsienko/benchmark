@@ -120,6 +120,37 @@ export function normalizeViewportBounds(bounds: ViewportBoundsLike): ViewportBou
 }
 
 /**
+ * Grow a viewport by `factor` of its span on each side, so small pans stay
+ * inside an already-fetched region. Antimeridian-aware (sw_lng > ne_lng).
+ * Once the padded longitude span reaches 360° the result is the whole world
+ * (-180..180); wrapping both edges instead would fold them past each other
+ * into a thin sliver (a -180..180 view padded by 0.5 used to become 0..0).
+ */
+export function padViewportBounds(bounds: ViewportBoundsLike, factor = 0.35): ViewportBoundsLike {
+  const latSpan = Math.max(bounds.ne_lat - bounds.sw_lat, 0.0001);
+  const crosses = bounds.sw_lng > bounds.ne_lng;
+  const lngSpan = crosses
+    ? Math.max(180 - bounds.sw_lng + (bounds.ne_lng + 180), 0.0001)
+    : Math.max(bounds.ne_lng - bounds.sw_lng, 0.0001);
+  const latPad = latSpan * factor;
+  const lngPad = lngSpan * factor;
+  const sw_lat = Math.max(-90, bounds.sw_lat - latPad);
+  const ne_lat = Math.min(90, bounds.ne_lat + latPad);
+
+  if (lngSpan + 2 * lngPad >= 360) {
+    return { sw_lat, ne_lat, sw_lng: -180, ne_lng: 180, zoom: bounds.zoom };
+  }
+
+  return {
+    sw_lat,
+    ne_lat,
+    sw_lng: normalizeLng(bounds.sw_lng - lngPad),
+    ne_lng: normalizeLng(bounds.ne_lng + lngPad),
+    zoom: bounds.zoom
+  };
+}
+
+/**
  * Approximate Leaflet viewport around a point without waiting for the map.
  * Good enough to prefetch pins while GPS / Leaflet race.
  */
