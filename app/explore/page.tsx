@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { createPortal } from "react-dom";
 import {
   type CSSProperties,
   FormEvent,
@@ -13,6 +14,7 @@ import {
 } from "react";
 import { createBench, getBench, getProfile, listBenchPins, listBenchReviews, searchBenches, searchPlaces, updateBenchLocation } from "@/src/lib/api";
 import { PLACE_MAX_ZOOM, PLACE_POINT_ZOOM, type PlaceResult } from "@/src/lib/places";
+import { clearPendingBench, stashPendingBench, takePendingBench } from "@/src/lib/pending-bench";
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { Toast } from "@/src/components/toast";
@@ -195,7 +197,7 @@ type ExploreFilters = {
 
 export default function ExplorePage() {
   const router = useRouter();
-  const { isAdmin, profileId, user } = useAuth();
+  const { isAdmin, profileId, user, loading: authLoading } = useAuth();
   const pinCacheRef = useRef<Map<string, BenchPin>>(new Map());
   const [benches, setBenches] = useState<BenchPin[]>([]);
   const [viewportBounds, setViewportBounds] = useState<ViewportBounds | null>(null);
@@ -209,6 +211,8 @@ export default function ExplorePage() {
   const [moveMode, setMoveMode] = useState(false);
   const [tempPlacement, setTempPlacement] = useState<{ lat: number; lng: number } | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  /** Signed-out visitor confirmed a pin: ask them to sign in before the form. */
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false);
   const [addStatus, setAddStatus] = useState<string | null>(null);
   const [addName, setAddName] = useState("");
   const [addNeighborhood, setAddNeighborhood] = useState("volunteer park");
@@ -726,12 +730,12 @@ export default function ExplorePage() {
     setTempPlacement({ lat, lng });
   }, []);
 
+  // Signed-out visitors can place a pin too; confirming it asks them to sign in.
   const handlePlusClick = useCallback(() => {
-    if (!user) return;
     setAddMode(true);
     setMoveMode(false);
     setTempPlacement(null);
-  }, [user]);
+  }, []);
 
   const handleMoveClick = useCallback(() => {
     if (!selectedBench) return;
@@ -743,18 +747,41 @@ export default function ExplorePage() {
 
   const handleConfirmAdd = useCallback(() => {
     if (!tempPlacement) return;
+    if (!user) {
+      // Remember the pin so the form reopens here after sign-in / sign-up.
+      stashPendingBench(tempPlacement);
+      setShowSignInPrompt(true);
+      return;
+    }
     setAddName("");
     setAddDescription("");
     setAddStatus(null);
     setShowAddForm(true);
-  }, [tempPlacement]);
+  }, [tempPlacement, user]);
 
   const handleCancelAdd = useCallback(() => {
     setAddMode(false);
     setMoveMode(false);
     setTempPlacement(null);
     setShowAddForm(false);
+    setShowSignInPrompt(false);
+    clearPendingBench();
   }, []);
+
+  // Back from sign-in / sign-up with a pin placed while signed out: reopen the add form on it.
+  // The saved camera already brings the map back to where the pin was dropped.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    const pending = takePendingBench();
+    if (!pending) return;
+    setMoveMode(false);
+    setAddMode(true);
+    setTempPlacement(pending);
+    setAddName("");
+    setAddDescription("");
+    setAddStatus(null);
+    setShowAddForm(true);
+  }, [authLoading, user]);
 
   const onAddFormPointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -1160,9 +1187,7 @@ export default function ExplorePage() {
             >
               <LocateIcon />
             </button>
-            {user && (
-              <>
-                {isAdmin && (
+            {user && isAdmin && (
                   <button
                     type="button"
                     onClick={handleMoveClick}
@@ -1204,8 +1229,6 @@ export default function ExplorePage() {
                 >
                   <PlusIcon />
                 </button>
-              </>
-            )}
           </>
         ) : (
           <>
@@ -1442,6 +1465,80 @@ export default function ExplorePage() {
       </div>
 
       {/* Add bench form sheet — above bottom nav, draggable + scrollable */}
+      {/* Portal to <body> so the sheet sits above the bottom nav bar. */}
+      {showSignInPrompt && tempPlacement && !user ? createPortal(
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 300,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center"
+          }}
+          onClick={() => setShowSignInPrompt(false)}
+        >
+          <div
+            className="surface-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Sign in to add a bench"
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              padding: "22px 20px max(22px, var(--safe-bottom))",
+              borderBottomLeftRadius: 0,
+              borderBottomRightRadius: 0,
+              borderTopLeftRadius: "var(--radius-lg, 16px)",
+              borderTopRightRadius: "var(--radius-lg, 16px)",
+              boxShadow: "0 -8px 32px rgba(0,0,0,0.18)"
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ margin: "0 0 6px", fontSize: 18 }}>sign in to add this bench</h2>
+            <p className="muted" style={{ margin: "0 0 18px", fontSize: 13, lineHeight: 1.45 }}>
+              your pin is saved. sign in or make an account and you&apos;ll come right back here to name it.
+            </p>
+            <div style={{ display: "grid", gap: 10 }}>
+              <button
+                type="button"
+                className="button-primary"
+                style={{ height: 44, borderRadius: 999, fontFamily: "inherit", fontSize: 14, cursor: "pointer" }}
+                onClick={() => router.push(`/auth/login?next=${encodeURIComponent("/explore")}`)}
+              >
+                sign in
+              </button>
+              <button
+                type="button"
+                style={{
+                  height: 44,
+                  borderRadius: 999,
+                  border: "1px solid var(--border)",
+                  background: "var(--surface)",
+                  color: "var(--text-primary)",
+                  fontFamily: "inherit",
+                  fontSize: 14,
+                  cursor: "pointer"
+                }}
+                onClick={() => router.push(`/auth/signup?next=${encodeURIComponent("/explore")}`)}
+              >
+                create an account
+              </button>
+              <button
+                type="button"
+                className="muted"
+                style={{ height: 36, border: "none", background: "transparent", fontFamily: "inherit", fontSize: 13, cursor: "pointer" }}
+                onClick={handleCancelAdd}
+              >
+                not now
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
+
       {showAddForm && tempPlacement && (
         <div
           style={{
