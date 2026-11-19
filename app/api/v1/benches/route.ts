@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { jsonData, jsonError } from "@/src/lib/api-response";
 import { createSupabaseServer, hasSupabase } from "@/src/lib/supabase";
-import { isRequestAdmin } from "@/src/lib/admin-access";
+import { getRequestActor } from "@/src/lib/request-auth";
+import { parseBenchSubmission, USER_DAILY_BENCH_LIMIT } from "@/src/lib/bench-submission";
 import type { Bench } from "@/src/lib/types";
 
 const DEFAULT_USER_ID = "user-1";
@@ -10,45 +11,56 @@ export async function POST(request: NextRequest) {
   if (!hasSupabase()) {
     return jsonError("Database not configured", "internal_error", 503);
   }
-  if (!(await isRequestAdmin())) {
-    return jsonError("Admin access required", "forbidden", 403);
+  // Any signed-in user may add a bench; admins can also set scores and tags.
+  const actor = await getRequestActor();
+  if (!actor) {
+    return jsonError("Sign in to add a bench", "unauthorized", 401);
+  }
+  if (!actor.isAdmin && !actor.profileId) {
+    return jsonError("Finish setting up your profile to add benches", "forbidden", 403);
   }
   try {
-    const body = await request.json();
-    const name = String(body.name ?? "").trim();
-    const neighborhood = String(body.neighborhood ?? "").trim();
-    const type = String(body.type ?? "park").trim() || "park";
-    const description = String(body.description ?? "").trim();
-    const latitude = Number(body.latitude);
-    const longitude = Number(body.longitude);
-    const viewScore = Number(body.viewScore ?? 0);
-    const remotenessScore = Number(body.remotenessScore ?? 0);
-    const popularityScore = Number(body.popularityScore ?? 0);
-    const averageRating = Number(body.averageRating ?? 0);
-    const tags = Array.isArray(body.tags) ? body.tags : ["user-submitted"];
+    const parsed = parseBenchSubmission(await request.json(), { isAdmin: actor.isAdmin });
+    if (!parsed.ok) return jsonError(parsed.error, "validation_error", 422);
+    const submission = parsed.value;
 
-    if (!name) return jsonError("Name is required", "validation_error", 422);
-    if (!neighborhood) return jsonError("Neighborhood is required", "validation_error", 422);
-    if (latitude < -90 || latitude > 90) return jsonError("Latitude must be between -90 and 90", "validation_error", 422);
-    if (longitude < -180 || longitude > 180) return jsonError("Longitude must be between -180 and 180", "validation_error", 422);
-
-    const id = `bench-${Date.now()}`;
     const supabase = createSupabaseServer();
 
+    if (!actor.isAdmin) {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count, error: countError } = await supabase
+        .from("benches")
+        .select("id", { count: "exact", head: true })
+        .eq("created_by_user_id", actor.profileId)
+        .gte("created_at", since);
+      if (countError) {
+        console.error("bench daily limit check error:", countError);
+        return jsonError("Unable to create bench", "internal_error", 500);
+      }
+      if ((count ?? 0) >= USER_DAILY_BENCH_LIMIT) {
+        return jsonError(
+          `You can add up to ${USER_DAILY_BENCH_LIMIT} benches a day. Try again tomorrow.`,
+          "rate_limited",
+          429
+        );
+      }
+    }
+
+    const id = `bench-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     const { data: rows, error } = await supabase.rpc("insert_bench", {
       p_id: id,
-      p_name: name,
-      p_neighborhood: neighborhood,
-      p_bench_type: type,
-      p_description: description,
-      p_view_score: viewScore,
-      p_remoteness_score: remotenessScore,
-      p_popularity_score: popularityScore,
-      p_average_rating: averageRating,
-      p_lat: latitude,
-      p_lng: longitude,
-      p_created_by_user_id: DEFAULT_USER_ID,
-      p_tags: tags
+      p_name: submission.name,
+      p_neighborhood: submission.neighborhood,
+      p_bench_type: submission.type,
+      p_description: submission.description,
+      p_view_score: submission.viewScore,
+      p_remoteness_score: submission.remotenessScore,
+      p_popularity_score: submission.popularityScore,
+      p_average_rating: submission.averageRating,
+      p_lat: submission.latitude,
+      p_lng: submission.longitude,
+      p_created_by_user_id: actor.profileId ?? DEFAULT_USER_ID,
+      p_tags: submission.tags
     });
 
     if (error) {
@@ -72,7 +84,7 @@ export async function POST(request: NextRequest) {
       distanceMeters: 0,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),
-      tags
+      tags: submission.tags
     };
     return jsonData(bench, 201);
   } catch (err) {

@@ -16,7 +16,6 @@ import { PLACE_MAX_ZOOM, PLACE_POINT_ZOOM, type PlaceResult } from "@/src/lib/pl
 import type { Bench, BenchPin, BenchReview } from "@/src/lib/types";
 import { BenchmarkLogo } from "@/src/components/benchmark-logo";
 import { Toast } from "@/src/components/toast";
-import { RequestBenchesCta } from "@/src/components/request-benches-cta";
 import type { MapFlyTo, ViewportBounds } from "@/src/components/explore-map";
 import {
   EXPLORE_RETURN_KEY,
@@ -234,7 +233,6 @@ export default function ExplorePage() {
   const addFormDragStartVh = useRef(ADD_FORM_PEEK_VH);
   const flyToRef = useRef<MapFlyTo>(() => {});
   const [bootView, setBootView] = useState<SavedMapView | null>(null);
-  const [coverageRequestDismissed, setCoverageRequestDismissed] = useState(false);
   const pinFetchGenRef = useRef(0);
   const pinAbortRef = useRef<AbortController | null>(null);
   const fetchedRegionRef = useRef<FetchedPinRegion | null>(null);
@@ -542,28 +540,6 @@ export default function ExplorePage() {
   );
   const selectedBench = benches.find((b) => b.id === selectedBenchID);
 
-  const mapCenter = useMemo(() => {
-    if (viewportBounds) {
-      return {
-        lat: (viewportBounds.sw_lat + viewportBounds.ne_lat) / 2,
-        lng: (viewportBounds.sw_lng + viewportBounds.ne_lng) / 2
-      };
-    }
-    if (bootView) return { lat: bootView.lat, lng: bootView.lng };
-    return null;
-  }, [viewportBounds, bootView]);
-
-  const showCoverageRequestCta =
-    !loading &&
-    !error &&
-    !addMode &&
-    !moveMode &&
-    !hasFilters &&
-    !coverageRequestDismissed &&
-    benches.length === 0 &&
-    mapCenter != null &&
-    (viewportBounds?.zoom ?? bootView?.zoom ?? 0) >= 12;
-
   // detailVersion bumps when prefetch finishes so carousel thumbs stay fresh.
   void detailVersion;
 
@@ -751,11 +727,11 @@ export default function ExplorePage() {
   }, []);
 
   const handlePlusClick = useCallback(() => {
-    if (!isAdmin) return;
+    if (!user) return;
     setAddMode(true);
     setMoveMode(false);
     setTempPlacement(null);
-  }, [isAdmin]);
+  }, [user]);
 
   const handleMoveClick = useCallback(() => {
     if (!selectedBench) return;
@@ -826,7 +802,7 @@ export default function ExplorePage() {
   const handleAddSubmit = useCallback(
     async (e: FormEvent<HTMLFormElement>) => {
       e.preventDefault();
-      if (!tempPlacement || !isAdmin) return;
+      if (!tempPlacement || !user) return;
       try {
         const created = await createBench({
           name: addName,
@@ -844,12 +820,12 @@ export default function ExplorePage() {
         trackEvent({ name: "bench_created", benchId: created.id });
         if (currentBoundsRef.current) refresh(currentBoundsRef.current).catch(() => {});
         handleCancelAdd();
-        showToast("bench submitted");
+        showToast("bench added");
       } catch (err) {
         setAddStatus(err instanceof Error ? err.message : "unable to add bench");
       }
     },
-    [tempPlacement, isAdmin, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd, showToast]
+    [tempPlacement, user, addName, addNeighborhood, addType, addDescription, refresh, handleCancelAdd, showToast]
   );
 
   return (
@@ -1214,8 +1190,7 @@ export default function ExplorePage() {
                   type="button"
                   className="button-primary"
                   onClick={handlePlusClick}
-                  disabled={!isAdmin}
-                  title={isAdmin ? "Add bench" : "bench creation is disabled"}
+                  title="Add bench"
                   style={{
                     width: 48,
                     height: 48,
@@ -1223,10 +1198,9 @@ export default function ExplorePage() {
                     display: "grid",
                     placeItems: "center",
                     boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    opacity: isAdmin ? 1 : 0.45,
-                    cursor: isAdmin ? "pointer" : "not-allowed"
+                    cursor: "pointer"
                   }}
-                  aria-label={isAdmin ? "Add bench" : "Bench creation is disabled"}
+                  aria-label="Add bench"
                 >
                   <PlusIcon />
                 </button>
@@ -1277,16 +1251,6 @@ export default function ExplorePage() {
         )}
       </div>
 
-      {/* Empty-area CTA — request benches via email */}
-      {showCoverageRequestCta && mapCenter ? (
-        <RequestBenchesCta
-          visible
-          latitude={mapCenter.lat}
-          longitude={mapCenter.lng}
-          defaultEmail={user?.email ?? ""}
-          onDismiss={() => setCoverageRequestDismissed(true)}
-        />
-      ) : null}
 
       {/* Add mode hint */}
       {(addMode || moveMode) && (
